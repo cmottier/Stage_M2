@@ -123,3 +123,6 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
+
+
+
