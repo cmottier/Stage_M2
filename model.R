@@ -1,6 +1,8 @@
 ###################################
-# Test avec 1 détection par cellule...
+# avec 1 détection par cellule...
 ###################################
+
+load("grid_sf.RData")
 
 # gestion des NA de grid_sf (pour tester, à voir quoi faire...)
 grid_sf$surface_en_eau[is.na(grid_sf$surface_en_eau)] <- 0
@@ -136,14 +138,15 @@ nt <- 1
 
 start <- Sys.time()
 # run the model!
-
+set.seed(123)
 model <-  nimbleModel(
   code = code,
   constants = constants,
   data = data,
   inits = inits())
-model$logProb_ones
+model$logProb_ones # avec cette graine, pas de problème de logProb = -Inf
 
+set.seed(123)
 out <- nimbleMCMC(
   code = code,
   constants = constants,
@@ -159,35 +162,38 @@ end - start
 
 MCMCsummary(out)
 
+MCMCtrace(out, pdf = FALSE, ind = TRUE, params = "alpha")
+MCMCplot(out)
+
 res <- out
 #res <- rbind(out$chain1, out$chain2)
 
 
-# select z
-mask <- str_detect(colnames(res), "z")
-res_z <- res[,mask]
-grid_sf$zestim <- apply(res_z, 2, median)
-grid_sf$zmoy <- apply(res_z, 2, mean)
-
-# viz
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as_factor(zestim))) +
-  labs(fill = "Présence potentielle estimée du ragondin") +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  geom_sf(data = nutria) +
-  theme_void()
-
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = zmoy)) +
-  labs(fill = "Présence potentielle estimée du ragondin") +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  geom_sf(data = nutria) +
-  theme_void()
+# # select z
+# mask <- str_detect(colnames(res), "z")
+# res_z <- res[,mask]
+# grid_sf$zestim <- apply(res_z, 2, median)
+# grid_sf$zmoy <- apply(res_z, 2, mean)
+# 
+# # viz
+# ggplot() +
+#   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as_factor(zestim))) +
+#   labs(fill = "Présence potentielle estimée du ragondin") +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   geom_sf(data = nutria) +
+#   theme_void()
+# 
+# ggplot() +
+#   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = zmoy)) +
+#   labs(fill = "Présence potentielle estimée du ragondin") +
+#   scale_fill_viridis_c() +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   geom_sf(data = nutria) +
+#   theme_void()
 
 
 ###################################
-# Test avec multiples détections par cellules...
+# avec multiples détections par cellules...
 ###################################
 
 # Bayesian version of the Koshkina (2017) model.
@@ -332,24 +338,24 @@ MCMCsummary(out)
 res <- rbind(out$chain1, out$chain2)
 
 
-# select z
-mask <- str_detect(colnames(res), "z")
-res_z <- res[,mask]
-grid_sf$zestim <- apply(res_z, 2, median)
-grid_sf$zmoy <- apply(res_z, 2, mean)
-
-# viz
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as_factor(zestim))) +
-  labs(fill = "Présence potentielle estimée du ragondin") +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  geom_sf(data = nutria) +
-  theme_void()
-
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = zmoy)) +
-  labs(fill = "Présence potentielle estimée du ragondin") +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  geom_sf(data = nutria) +
-  theme_void()
+# # select z
+# mask <- str_detect(colnames(res), "z")
+# res_z <- res[,mask]
+# grid_sf$zestim <- apply(res_z, 2, median)
+# grid_sf$zmoy <- apply(res_z, 2, mean)
+# 
+# # viz
+# ggplot() +
+#   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as_factor(zestim))) +
+#   labs(fill = "Présence potentielle estimée du ragondin") +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   geom_sf(data = nutria) +
+#   theme_void()
+# 
+# ggplot() +
+#   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = zmoy)) +
+#   labs(fill = "Présence potentielle estimée du ragondin") +
+#   scale_fill_viridis_c() +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   geom_sf(data = nutria) +
+#   theme_void()
