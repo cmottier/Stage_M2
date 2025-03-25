@@ -501,7 +501,7 @@ inits <- function(){
 params <- c("alpha", "beta", "z")
 
 # MCMC settings (pour tester...)
-nc <- 1 #2
+nc <- 2
 nburn <- 1000 #5000  
 ni <- nburn + 1000 #30000
 nt <- 1
@@ -570,7 +570,7 @@ code <- nimbleCode({
     
     log(lambda[pixel]) <- beta[1] + beta[2] * x_s[pixel] + cell_area
     # Species presence in a gridcell as a Bernoulli trial
-    z[pixel] ~ dbern(1 - exp(-lambda[pixel]))
+    # z[pixel] ~ dbern(1 - exp(-lambda[pixel]))
     # presence only thinning prob linear predictor
     #
     # h_s = covariates for thinning probability
@@ -615,7 +615,7 @@ code <- nimbleCode({
     alpha[j] ~ dnorm(0, sd = 2)
   }
   # Derived parameter, the number of cells occupied
-  zsum <- sum(z[1:npixel])
+  # zsum <- sum(z[1:npixel])
 })
 
 head(grid_sf$grid_id) # les ID de toutes les cellules
@@ -636,26 +636,26 @@ data <- list(
 constants <- list(
   npixel = npix,
   m = length(pixel.id.det), 
-  CONSTANT = 50000,
+  CONSTANT = 10000,
   po_pixel = pixel.id.det,
   nobs_pixel = grid_sf$nnutria[grid_sf$nnutria > 0]) # modifié pour prendre en compte toutes les détections
 
-zinit <- numeric(npix)
-zinit[pixel.id.det] <- 1
+# zinit <- numeric(npix)
+# zinit[pixel.id.det] <- 1
 inits <- function(){
   list(
     beta = rnorm(2, 0, 1), 
-    alpha = rnorm(2, 0, 1),
-    z = zinit # pourquoi mis en commentaire dans code initial ?
+    alpha = rnorm(2, 0, 1)
+    # z = zinit # pourquoi mis en commentaire dans code initial ?
   )
 }
 
-params <- c("alpha", "beta", "z")
+params <- c("alpha", "beta") #, "z")
 
 # MCMC settings (pour tester...)
 nc <- 2
-nburn <- 5000 
-ni <- nburn + 10000 #30000
+nburn <- 500 # 5000
+ni <- nburn + 1000 #10000
 nt <- 1
 
 start <- Sys.time()

@@ -1,17 +1,17 @@
 # Rivières 
-Ariege <- sf::st_read("../Data/Rivieres/Ariege/COURS_D_EAU.shp")
-Aude <- sf::st_read("../Data/Rivieres/Aude/COURS_D_EAU.shp")
-Aveyron <- sf::st_read("../Data/Rivieres/Aveyron/COURS_D_EAU.shp")
-Gard <- sf::st_read("../Data/Rivieres/Gard/COURS_D_EAU.shp")
-HauteGaronne <- sf::st_read("../Data/Rivieres/HauteGaronne/COURS_D_EAU.shp")
-Gers <- sf::st_read("../Data/Rivieres/Gers/COURS_D_EAU.shp")
-Herault <- sf::st_read("../Data/Rivieres/Herault/COURS_D_EAU.shp")
-Lot <- sf::st_read("../Data/Rivieres/Lot/COURS_D_EAU.shp")
-Lozere <- sf::st_read("../Data/Rivieres/Lozere/COURS_D_EAU.shp")
-HautesPyrenees <- sf::st_read("../Data/Rivieres/HautesPyrenees/COURS_D_EAU.shp")
-PyreneesOrientales <- sf::st_read("../Data/Rivieres/PO/COURS_D_EAU.shp")
-Tarn <- sf::st_read("../Data/Rivieres/Tarn/COURS_D_EAU.shp")
-TarnetGaronne <- sf::st_read("../Data/Rivieres/TarnEtGaronne/COURS_D_EAU.shp")
+Ariege <- sf::st_read("Data/Rivieres/Ariege/COURS_D_EAU.shp")
+Aude <- sf::st_read("Data/Rivieres/Aude/COURS_D_EAU.shp")
+Aveyron <- sf::st_read("Data/Rivieres/Aveyron/COURS_D_EAU.shp")
+Gard <- sf::st_read("Data/Rivieres/Gard/COURS_D_EAU.shp")
+HauteGaronne <- sf::st_read("Data/Rivieres/HauteGaronne/COURS_D_EAU.shp")
+Gers <- sf::st_read("Data/Rivieres/Gers/COURS_D_EAU.shp")
+Herault <- sf::st_read("Data/Rivieres/Herault/COURS_D_EAU.shp")
+Lot <- sf::st_read("Data/Rivieres/Lot/COURS_D_EAU.shp")
+Lozere <- sf::st_read("Data/Rivieres/Lozere/COURS_D_EAU.shp")
+HautesPyrenees <- sf::st_read("Data/Rivieres/HautesPyrenees/COURS_D_EAU.shp")
+PyreneesOrientales <- sf::st_read("Data/Rivieres/PO/COURS_D_EAU.shp")
+Tarn <- sf::st_read("Data/Rivieres/Tarn/COURS_D_EAU.shp")
+TarnetGaronne <- sf::st_read("Data/Rivieres/TarnEtGaronne/COURS_D_EAU.shp")
 
 # bind river
 river_lines <- Ariege %>%
@@ -63,19 +63,19 @@ ggplot() +
   theme_void()
 
 # Plan d'eau
-Ariege <- sf::st_read("../Data/Rivieres/Ariege/PLAN_D_EAU.shp")
-Aude <- sf::st_read("../Data/Rivieres/Aude/PLAN_D_EAU.shp")
-Aveyron <- sf::st_read("../Data/Rivieres/Aveyron/PLAN_D_EAU.shp")
-Gard <- sf::st_read("../Data/Rivieres/Gard/PLAN_D_EAU.shp")
-HauteGaronne <- sf::st_read("../Data/Rivieres/HauteGaronne/PLAN_D_EAU.shp")
-Gers <- sf::st_read("../Data/Rivieres/Gers/PLAN_D_EAU.shp")
-Herault <- sf::st_read("../Data/Rivieres/Herault/PLAN_D_EAU.shp")
-Lot <- sf::st_read("../Data/Rivieres/Lot/PLAN_D_EAU.shp")
-Lozere <- sf::st_read("../Data/Rivieres/Lozere/PLAN_D_EAU.shp")
-HautesPyrenees <- sf::st_read("../Data/Rivieres/HautesPyrenees/PLAN_D_EAU.shp")
-PyreneesOrientales <- sf::st_read("../Data/Rivieres/PO/PLAN_D_EAU.shp")
-Tarn <- sf::st_read("../Data/Rivieres/Tarn/PLAN_D_EAU.shp")
-TarnetGaronne <- sf::st_read("../Data/Rivieres/TarnEtGaronne/PLAN_D_EAU.shp")
+Ariege <- sf::st_read("Data/Rivieres/Ariege/PLAN_D_EAU.shp")
+Aude <- sf::st_read("Data/Rivieres/Aude/PLAN_D_EAU.shp")
+Aveyron <- sf::st_read("Data/Rivieres/Aveyron/PLAN_D_EAU.shp")
+Gard <- sf::st_read("Data/Rivieres/Gard/PLAN_D_EAU.shp")
+HauteGaronne <- sf::st_read("Data/Rivieres/HauteGaronne/PLAN_D_EAU.shp")
+Gers <- sf::st_read("Data/Rivieres/Gers/PLAN_D_EAU.shp")
+Herault <- sf::st_read("Data/Rivieres/Herault/PLAN_D_EAU.shp")
+Lot <- sf::st_read("Data/Rivieres/Lot/PLAN_D_EAU.shp")
+Lozere <- sf::st_read("Data/Rivieres/Lozere/PLAN_D_EAU.shp")
+HautesPyrenees <- sf::st_read("Data/Rivieres/HautesPyrenees/PLAN_D_EAU.shp")
+PyreneesOrientales <- sf::st_read("Data/Rivieres/PO/PLAN_D_EAU.shp")
+Tarn <- sf::st_read("Data/Rivieres/Tarn/PLAN_D_EAU.shp")
+TarnetGaronne <- sf::st_read("Data/Rivieres/TarnEtGaronne/PLAN_D_EAU.shp")
 
 # On regroupe
 plan_eau <- Ariege %>%
@@ -123,6 +123,44 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
+# Buffer autour des rivières et plans d'eau (à 1000m)
 
+# Long : à éviter de lancer
+# ggplot () +
+#   geom_sf(data = rivers_occ, lwd = 0.1, color = "royalblue") +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) 
 
+# avant intersection avec grid_sf
 
+# Autour des rivières
+rivers <- river_lines %>%
+  st_transform(crs = st_crs(occitanie))
+
+buffer_river <- st_buffer(rivers, dist = 1000, endCapStyle = "ROUND")
+buffer_river <- st_union(buffer_river)
+
+occitanie_buff_riv <- st_intersection(occitanie, buffer_river)
+
+ggplot () +
+  geom_sf(data = occitanie_buff_riv, fill = "lightblue", color = "black", lwd = .5) +
+  theme_void()
+
+# Autour des plans d'eau
+plan <- plan_eau %>%
+  st_transform(crs = st_crs(occitanie))
+
+buffer_plan <- st_buffer(plan, dist = 1000, endCapStyle = "ROUND")
+buffer_plan <- st_union(buffer_plan)
+
+occitanie_buff_plan <- st_intersection(occitanie, buffer_plan)
+
+ggplot () +
+  geom_sf(data = occitanie_buff_plan, fill = "lightblue", color = "black", lwd = .5) +
+  theme_void()
+
+# Union des deux
+occitanie_buff <- st_union(occitanie_buff_plan, occitanie_buff_riv)
+
+ggplot () +
+  geom_sf(data = occitanie_buff, fill = "lightblue", color = "black", lwd = .5) +
+  theme_void()

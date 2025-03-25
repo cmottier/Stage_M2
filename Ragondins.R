@@ -4,8 +4,8 @@
 
 # libraries utiles
 
-# library(nimble)
-# library(MCMCvis)
+library(nimble)
+library(MCMCvis)
 # library(raster)
 library(ggplot2)
 library(tidyverse)
