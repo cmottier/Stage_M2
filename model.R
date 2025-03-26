@@ -1,10 +1,17 @@
+library(nimble)
+library(MCMCvis)
+library(ggplot2)
+library(sf)
+library(stringr)
+library(tidyverse)
+
+load("grid_sf.RData")
+
 ###################################
 # avec 1 détection par cellule...
 ###################################
 
-load("grid_sf.RData")
-
-# gestion des NA de grid_sf (pour tester, à voir quoi faire...)
+# gestion des NA et -Inf de grid_sf (à vérifier...)
 grid_sf$surface_en_eau[is.na(grid_sf$surface_en_eau)] <- 0
 grid_sf$logdensity[is.na(grid_sf$logdensity)] <- 0
 grid_sf$logdensity[is.infinite(grid_sf$logdensity)] <- -100 # valeur artificielle à déterminer ? 
@@ -31,7 +38,7 @@ code <- nimbleCode({
       beta[8] * x_7[pixel] +
       beta[9] * x_8[pixel] + cell_area
     # Species presence in a gridcell as a Bernoulli trial
-    # z[pixel] ~ dbern(1 - exp(-lambda[pixel]))
+    z[pixel] ~ dbern(1 - exp(-lambda[pixel]))
     # presence only thinning prob linear predictor
     #
     # h_s = covariates for thinning probability
@@ -79,14 +86,15 @@ code <- nimbleCode({
   # zsum <- sum(z[1:npixel])
 })
 
-head(grid_sf$grid_id) # les ID de toutes les cellules
+head(grid_sf$grid_id) # les ID des cellules
 
 pixel.id.det <- grid_sf$grid_id[grid_sf$nnutria > 0] # les ID des cellules où il y a au moins une occurrence
 head(pixel.id.det)
 
 npix <- nrow(grid_sf)
 s.area <- as.numeric(units::set_units(st_area(grid_sf)[1],"km^2"))
-(logarea <- log(s.area / npix))
+(logarea <- log(s.area / npix)) # erreur dans le code d'origine ? -> s.area déjà par cellule...
+# logarea <- log(s.area) # pose problème pour logProb...
 
 data <- list(
   cell_area = logarea,
@@ -100,35 +108,25 @@ data <- list(
   x_8 = scale(grid_sf$lgr_rivieres)[,1],
   h_1 = scale(grid_sf$lgr_chemins)[,1],
   h_2 = scale(grid_sf$lgr_routes)[,1],
-  # x_1 = drop_units((grid_sf$surface_en_eau - mean(grid_sf$surface_en_eau))/sd(grid_sf$surface_en_eau)),
-  # x_2 = drop_units((grid_sf$logdensity - mean(grid_sf$logdensity))/sd(grid_sf$logdensity)),
-  # x_3 = drop_units((grid_sf$agri_cover - mean(grid_sf$agri_cover))/sd(grid_sf$agri_cover)),
-  # x_4 = (grid_sf$temp_min - mean(grid_sf$temp_min))/sd(grid_sf$temp_min),
-  # x_5 = (grid_sf$temp_max - mean(grid_sf$temp_max))/sd(grid_sf$temp_max),
-  # x_6 = (grid_sf$temp_mean - mean(grid_sf$temp_mean))/sd(grid_sf$temp_mean),
-  # x_7 = (grid_sf$prec_cum - mean(grid_sf$prec_cum))/sd(grid_sf$prec_cum),
-  # x_8 = (grid_sf$lgr_rivieres - mean(grid_sf$lgr_rivieres))/sd(grid_sf$lgr_rivieres),
-  # h_1 = (grid_sf$lgr_chemins - mean(grid_sf$lgr_chemins))/sd(grid_sf$lgr_chemins),
-  # h_2 = (grid_sf$lgr_routes - mean(grid_sf$lgr_routes))/sd(grid_sf$lgr_routes),
   ones = rep(1, length(pixel.id.det)))
 
 constants <- list(
   npixel = npix,
-  m = length(pixel.id.det), # à modifier pour prendre en compte toutes les détections
-  CONSTANT = 10000,
-  po_pixel = pixel.id.det) # à modifier pour prendre en compte toutes les détections
+  m = length(pixel.id.det), 
+  CONSTANT = 50000,
+  po_pixel = pixel.id.det) 
 
-# zinit <- numeric(npix)
-# zinit[pixel.id.det] <- 1
+zinit <- numeric(npix)
+zinit[pixel.id.det] <- 1
 inits <- function(){
   list(
     beta = rnorm(9, 0, 1), 
-    alpha = rnorm(3, 0, 1)
-    # z = zinit
+    alpha = rnorm(3, 0, 1),
+    z = zinit # pourquoi en commentaire dans le code initial ?
   )
 }
 
-params <- c("alpha", "beta")
+params <- c("alpha", "beta", "z")
 
 # MCMC settings (pour tester...)
 nc <- 2
@@ -136,17 +134,19 @@ nburn <- 5000 #5000
 ni <- nburn + 10000 #30000
 nt <- 1
 
-start <- Sys.time()
 # run the model!
-set.seed(123)
+set.seed(10) # graine pour voir apparaître -Inf dans logProb_ones
+set.seed(123) # graine pour ne pas voir apparaître -Inf dans logProb_ones
 model <-  nimbleModel(
   code = code,
   constants = constants,
   data = data,
   inits = inits())
-model$logProb_ones # avec cette graine, pas de problème de logProb = -Inf
+model$logProb_ones 
+# si on corrige logarea, tous les essais ont donné -Inf et le MCMC ne marche pas...
 
 set.seed(123)
+start <- Sys.time()
 out <- nimbleMCMC(
   code = code,
   constants = constants,
@@ -163,37 +163,35 @@ end - start
 MCMCsummary(out)
 
 MCMCtrace(out, pdf = FALSE, ind = TRUE, params = "alpha")
-MCMCplot(out)
+MCMCplot(out, params = "beta")
 
-res <- out
-#res <- rbind(out$chain1, out$chain2)
+res <- rbind(out$chain1, out$chain2)
 
+# select z
+mask <- str_detect(colnames(res), "z")
+res_z <- res[,mask]
+grid_sf$zestim <- apply(res_z, 2, median)
+grid_sf$zmoy <- apply(res_z, 2, mean)
 
-# # select z
-# mask <- str_detect(colnames(res), "z")
-# res_z <- res[,mask]
-# grid_sf$zestim <- apply(res_z, 2, median)
-# grid_sf$zmoy <- apply(res_z, 2, mean)
-# 
-# # viz
-# ggplot() +
-#   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as_factor(zestim))) +
-#   labs(fill = "Présence potentielle estimée du ragondin") +
-#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-#   geom_sf(data = nutria) +
-#   theme_void()
-# 
-# ggplot() +
-#   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = zmoy)) +
-#   labs(fill = "Présence potentielle estimée du ragondin") +
-#   scale_fill_viridis_c() +
-#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-#   geom_sf(data = nutria) +
-#   theme_void()
+# viz
+ggplot() +
+  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as_factor(zestim))) +
+  labs(fill = "Présence potentielle estimée du ragondin") +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = nutria) +
+  theme_void()
+
+ggplot() +
+  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = zmoy)) +
+  labs(fill = "Présence potentielle estimée du ragondin") +
+  scale_fill_viridis_c() +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = nutria) +
+  theme_void()
 
 
 ###################################
-# avec multiples détections par cellules...
+# avec multiples détections par cellules -> ne marche pas... 
 ###################################
 
 # Bayesian version of the Koshkina (2017) model.
@@ -217,7 +215,7 @@ code <- nimbleCode({
       beta[8] * x_7[pixel] +
       beta[9] * x_8[pixel] + cell_area
     # Species presence in a gridcell as a Bernoulli trial
-    # z[pixel] ~ dbern(1 - exp(-lambda[pixel]))
+    z[pixel] ~ dbern(1 - exp(-lambda[pixel]))
     # presence only thinning prob linear predictor
     #
     # h_s = covariates for thinning probability
@@ -291,21 +289,21 @@ data <- list(
 constants <- list(
   npixel = npix,
   m = length(pixel.id.det),
-  CONSTANT = 500000, # problème : la constante à choisir pour guarantir proba ! 
+  CONSTANT = 1000000, # problème : la constante à choisir pour guarantir proba ! 
   po_pixel = pixel.id.det,
   nobs_pixel = grid_sf$nnutria[grid_sf$nnutria > 0]) # modifié pour prendre en compte toutes les détections
 
-# zinit <- numeric(npix)
-# zinit[pixel.id.det] <- 1
+zinit <- numeric(npix)
+zinit[pixel.id.det] <- 1
 inits <- function(){
   list(
     beta = rnorm(9, 0, 1),
-    alpha = rnorm(3, 0, 1)
-    # z = zinit # pourquoi mis en commentaire dans code initial ?
+    alpha = rnorm(3, 0, 1),
+    z = zinit # pourquoi mis en commentaire dans code initial ?
   )
 }
 
-params <- c("alpha", "beta")
+params <- c("alpha", "beta", "z")
 
 # MCMC settings (pour tester...)
 nc <- 2
@@ -313,13 +311,13 @@ nburn <- 5000 #5000
 ni <- nburn + 10000 #30000
 nt <- 1
 
-start <- Sys.time()
-
 # pour comprendre le problème du modèle, il faut comprendre ça : 
 model <- nimbleModel(code, constants = constants, data = data, inits = inits())
 model$logProb_ones
 
 # run the model!
+start <- Sys.time()
+
 out <- nimbleMCMC(
   code = code,
   constants = constants,
