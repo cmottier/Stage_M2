@@ -133,10 +133,8 @@ ggplot() +
 # avant intersection avec grid_sf
 
 # Autour des rivières
-rivers <- river_lines %>%
-  st_transform(crs = st_crs(occitanie))
 
-buffer_river <- st_buffer(rivers, dist = 1000, endCapStyle = "ROUND")
+buffer_river <- st_buffer(river_lines, dist = 1000, endCapStyle = "ROUND")
 buffer_river <- st_union(buffer_river)
 
 occitanie_buff_riv <- st_intersection(occitanie, buffer_river)
@@ -146,10 +144,8 @@ ggplot () +
   theme_void()
 
 # Autour des plans d'eau
-plan <- plan_eau %>%
-  st_transform(crs = st_crs(occitanie))
 
-buffer_plan <- st_buffer(plan, dist = 1000, endCapStyle = "ROUND")
+buffer_plan <- st_buffer(plan_eau, dist = 1000, endCapStyle = "ROUND")
 buffer_plan <- st_union(buffer_plan)
 
 occitanie_buff_plan <- st_intersection(occitanie, buffer_plan)
@@ -164,3 +160,5 @@ occitanie_buff <- st_union(occitanie_buff_plan, occitanie_buff_riv)
 ggplot () +
   geom_sf(data = occitanie_buff, fill = "lightblue", color = "black", lwd = .5) +
   theme_void()
+
+save(occitanie_buff, file = "Data/buffer.RData")
