@@ -5,12 +5,22 @@ library(sf)
 library(stringr)
 library(tidyverse)
 
-load("grid_sf.RData")
+
+load("grid_sf_c.RData")
+
+# on enlève les cellules sans intersection (surface nulle)
+grid_sf <- grid_sf %>%
+  filter(as.numeric(area)!=0)
+
+grid_sf$grid_id = 1:lengths(grid_sf)[1] # on renumérote les cellules
 
 # gestion des NA et -Inf de grid_sf (à vérifier...)
 grid_sf$surface_en_eau[is.na(grid_sf$surface_en_eau)] <- 0
+grid_sf$lgr_rivieres[is.na(grid_sf$lgr_rivieres)] <- 0
+grid_sf$lgr_routes[is.na(grid_sf$lgr_routes)] <- 0
+grid_sf$lgr_chemins[is.na(grid_sf$lgr_chemins)] <- 0
 grid_sf$logdensity[is.na(grid_sf$logdensity)] <- 0
-grid_sf$logdensity[is.infinite(grid_sf$logdensity)] <- -100 # valeur artificielle à déterminer ? 
+grid_sf$logdensity[is.infinite(grid_sf$logdensity)] <- -50 # valeur artificielle à déterminer ? 
 grid_sf$agri_cover[is.na(grid_sf$agri_cover)] <- 0
 
 ################################################################################
@@ -39,7 +49,9 @@ code <- nimbleCode({
       beta[6] * x_5[pixel] + 
       beta[7] * x_6[pixel] +
       beta[8] * x_7[pixel] +
-      beta[9] * x_8[pixel] + cell_area
+      beta[9] * x_8[pixel] + 
+      cell_area # si on fait à l'échelle de le cellule...
+      # cell_area[pixel] # si prise en compte de la surface intersectée
     # Species presence in a gridcell as a Bernoulli trial
     z[pixel] ~ dbern(1 - exp(-lambda[pixel]))
     # presence only thinning prob linear predictor
@@ -95,9 +107,13 @@ pixel.id.det <- grid_sf$grid_id[grid_sf$nnutria > 0] # les ID des cellules où i
 head(pixel.id.det)
 
 npix <- nrow(grid_sf)
+# avec prise en compte de la surface intersectée
+# s.area <- as.numeric(units::set_units(grid_sf$area,"km^2"))
+# logarea <- log(s.area) 
+
+# à l'échelle de la cellule
 s.area <- as.numeric(units::set_units(st_area(grid_sf)[1],"km^2"))
-(logarea <- log(s.area / npix)) # erreur dans le code d'origine ? -> s.area déjà par cellule...
-# logarea <- log(s.area) # suggestion de correction, pose problème pour logProb...
+logarea <- log(s.area) 
 
 data <- list(
   cell_area = logarea,
@@ -146,7 +162,30 @@ model <-  nimbleModel(
   data = data,
   inits = inits())
 model$logProb_ones 
-# si on corrige logarea, tous les essais ont donné -Inf et le MCMC ne marche pas...
+
+set.seed(123) # graine pour voir apparaître -Inf dans logProb_ones
+iv <- inits()
+
+# param b
+b <- plogis(iv$alpha[1] + iv$alpha[2] * data$h_1 + iv$alpha[3] * data$h_2) # pas de valeurs qui explosent
+summary(b)
+
+# param lambda
+lambda <- exp(iv$beta[1] +
+                iv$beta[2] * data$x_1 +
+                iv$beta[3] * data$x_2 +
+                iv$beta[4] * data$x_3 +
+                iv$beta[5] * data$x_4 +
+                iv$beta[6] * data$x_5 +
+                iv$beta[7] * data$x_6 +
+                iv$beta[8] * data$x_7 +
+                iv$beta[9] * data$x_8 + data$cell_area) # plusieurs valeurs énormes
+summary(lambda)
+which.max(lambda)
+data$x_1[which.max(lambda)]
+summary(data$x_7)
+
+
 
 set.seed(10)
 set.seed(123)
@@ -193,7 +232,7 @@ p <- ggplot() +
   # geom_sf(data = nutria) +
   theme_light()
 p
-# ggsave(plot = p, "Images/map_env.png", dpi = 600)
+ggsave(plot = p, "Images/map_env_c_2.png", dpi = 600)
 
 ###################################
 # avec multiples détections par cellules -> ne marche pas... 
@@ -545,3 +584,11 @@ p_gbif <- ggplot() +
 p_gbif
 # ggsave(plot = p_gbif, "Images/map_gbif.png", dpi = 600)
 
+
+
+# numéro des cellules
+grid_sf %>% 
+  ggplot() +
+  geom_sf(lwd = 0.1, aes(fill = (grid_id %in% c(256, 304, 56, 282, 347)))) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  theme_void()

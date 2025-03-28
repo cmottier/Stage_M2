@@ -1,3 +1,8 @@
+#################################################
+# Création des buffers autours des cours d'eau et des plans d'eau
+#################################################
+
+# Import des données
 # Rivières 
 Ariege <- sf::st_read("Data/Rivieres/Ariege/COURS_D_EAU.shp")
 Aude <- sf::st_read("Data/Rivieres/Aude/COURS_D_EAU.shp")
@@ -32,35 +37,6 @@ river_lines <- Ariege %>%
 
 rm(list=c("Ariege", "Aude","Aveyron","Gard","Gers","HauteGaronne",
           "HautesPyrenees","Herault","Lot","Lozere","PyreneesOrientales","Tarn","TarnetGaronne"))
-
-# rivières d'Occitanie
-rivers_occ <- river_lines %>%
-  st_transform(crs = st_crs(grid_sf)) %>%
-  st_intersection(grid_sf)
-
-# longueur de chaque segment
-rivers_occ$length <- st_length(rivers_occ)
-
-# somme des segments par cellule
-longueur_par_cellule <- rivers_occ %>%
-  group_by(grid_id) %>%  
-  summarise(lgr_totale = sum(length))  # Somme des longueurs
-
-# jointure
-grid_sf$lgr_rivieres <- 0
-for (i in 1:nrow(grid_sf)){
-  mask <- grid_sf$grid_id[i]
-  if (sum(longueur_par_cellule$grid_id == mask) == 0) next
-  grid_sf$lgr_rivieres[i] <- longueur_par_cellule$lgr_totale[longueur_par_cellule$grid_id == mask]
-}
-
-# visualisation
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = lgr_rivieres/1000)) +
-  labs(fill = "Longueur de cours d'eau (km)") +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
 
 # Plan d'eau
 Ariege <- sf::st_read("Data/Rivieres/Ariege/PLAN_D_EAU.shp")
@@ -97,56 +73,26 @@ plan_eau <- Ariege %>%
 rm(list=c("Ariege", "Aude","Aveyron","Gard","Gers","HauteGaronne",
           "HautesPyrenees","Herault","Lot","Lozere","PyreneesOrientales","Tarn","TarnetGaronne"))
 
-# à voir s'il faut faire un tri
-unique(plan_eau$NATURE)
+# Buffers à 1000m
 
-# avec la grille
-plan_eau_occ <- plan_eau %>%
-  st_transform(crs = st_crs(grid_sf)) %>%
-  st_intersection(grid_sf) %>%
-  mutate(area = st_area(.)) %>%
-  group_by(grid_id) %>%
-  summarise(aera_eau = sum(area)) %>%
-  as_tibble() %>%
-  select(-geometry)
-
-grid_sf <- grid_sf %>% 
-  full_join(plan_eau_occ, by = "grid_id") %>%
-  mutate(.before = 1, surface_en_eau = aera_eau/area) %>%
-  select(-aera_eau)
-
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(surface_en_eau))) +
-  scale_fill_viridis_c(
-    labels = scales::percent_format()
-  ) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
-
-# Buffer autour des rivières et plans d'eau (à 1000m)
-
-# Long : à éviter de lancer
+# plot des rivières (Long : à éviter de lancer)
 # ggplot () +
 #   geom_sf(data = rivers_occ, lwd = 0.1, color = "royalblue") +
 #   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) 
 
-# avant intersection avec grid_sf
-
-# Autour des rivières
-
+# Rivières
 buffer_river <- st_buffer(river_lines, dist = 1000, endCapStyle = "ROUND")
-buffer_river <- st_union(buffer_river)
+buffer_river <- st_union(buffer_river) # on simplifie
 
-occitanie_buff_riv <- st_intersection(occitanie, buffer_river)
+occitanie_buff_riv <- st_intersection(occitanie, buffer_river) 
 
 ggplot () +
   geom_sf(data = occitanie_buff_riv, fill = "lightblue", color = "black", lwd = .5) +
   theme_void()
 
-# Autour des plans d'eau
-
+# Plans d'eau
 buffer_plan <- st_buffer(plan_eau, dist = 1000, endCapStyle = "ROUND")
-buffer_plan <- st_union(buffer_plan)
+buffer_plan <- st_union(buffer_plan) # on simplifie
 
 occitanie_buff_plan <- st_intersection(occitanie, buffer_plan)
 
@@ -161,4 +107,4 @@ ggplot () +
   geom_sf(data = occitanie_buff, fill = "lightblue", color = "black", lwd = .5) +
   theme_void()
 
-save(occitanie_buff, file = "Data/buffer.RData")
+# save(occitanie_buff, file = "Data/buffer.RData")
