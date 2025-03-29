@@ -45,7 +45,7 @@ code <- nimbleCode({
     #
     
     log(lambda[pixel]) <- beta[1] +
-      # beta[2] * x_1[pixel] +
+      beta[2] * x_1[pixel] +
       beta[3] * x_2[pixel] +
       beta[4] * x_3[pixel] + 
       beta[5] * x_4[pixel] + 
@@ -202,7 +202,7 @@ out_env <- nimbleMCMC(
 end <- Sys.time()
 end - start
 
-save(out_env, file = "out_env.RData")
+# save(out_env, file = "out_env.RData")
 
 MCMCsummary(out_env)
 
@@ -235,6 +235,56 @@ p <- ggplot() +
 p
 # ggsave(plot = p, "Images/map_env.png", dpi = 600)
 
+# select alpha
+mask <- str_detect(colnames(res), "alpha")
+res_alpha <- res[,mask]
+alphaestim <- apply(res_alpha, 2, median)
+alphamoy <- apply(res_alpha, 2, mean)
+
+# select beta
+mask <- str_detect(colnames(res), "beta")
+res_beta <- res[,mask]
+betaestim <- apply(res_beta, 2, median)
+betamoy <- apply(res_beta, 2, mean)
+
+# lambda et b
+grid_selec$lambda <- exp(betaestim[1] +
+                betaestim[2] * data$x_1 +
+                betaestim[3] * data$x_2 +
+                betaestim[4] * data$x_3 +
+                betaestim[5] * data$x_4 +
+                betaestim[6] * data$x_5 +
+                betaestim[7] * data$x_6 +
+                betaestim[8] * data$x_7 +
+                betaestim[9] * data$x_8 + data$cell_area)
+grid_selec$b <- plogis(alphaestim[1] +
+                alphaestim[2] * data$h_1 +
+                alphaestim[3] * data$h_2)
+
+# plot
+ggplot() +
+  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = lambda)) +
+  labs(fill = "Intensité") +
+  scale_fill_viridis_c(begin = 0, end = 1) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = nutria) +
+  theme_light()
+
+ggplot() +
+  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = b)) +
+  labs(fill = "Effort") +
+  scale_fill_viridis_c(begin = 0, end = 1) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = nutria) +
+  theme_light()
+
+ggplot() +
+  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = 1-exp(-lambda))) +
+  labs(fill = "Présence potentielle estimée du ragondin") +
+  scale_fill_viridis_c(begin = 0, end = 1) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = nutria) +
+  theme_light()
 
 
 ################################################################################
@@ -437,24 +487,66 @@ p_gbif <- ggplot() +
 p_gbif
 # ggsave(plot = p_gbif, "Images/map_gbif.png", dpi = 600)
 
+# select alpha
+mask <- str_detect(colnames(res), "alpha")
+res_alpha <- res[,mask]
+alphaestim <- apply(res_alpha, 2, median)
+alphamoy <- apply(res_alpha, 2, mean)
+
+# select beta
+mask <- str_detect(colnames(res), "beta")
+res_beta <- res[,mask]
+betaestim <- apply(res_beta, 2, median)
+betamoy <- apply(res_beta, 2, mean)
+
+# lambda et b
+grid_selec$lambda <- exp(betaestim[1] +
+                           betaestim[2] * data$x_1 +
+                           betaestim[3] * data$x_2 +
+                           betaestim[4] * data$x_3 +
+                           betaestim[5] * data$x_4 +
+                           betaestim[6] * data$x_5 +
+                           betaestim[7] * data$x_6 +
+                           betaestim[8] * data$x_7 +
+                           betaestim[9] * data$x_8 + data$cell_area)
+grid_selec$b <- plogis(alphaestim[1] +
+                         alphaestim[2] * data$h_1 )
+
+# plot
+ggplot() +
+  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = lambda)) +
+  labs(fill = "Intensité") +
+  scale_fill_viridis_c(begin = 0, end = 1) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = nutria) +
+  theme_light()
+
+ggplot() +
+  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = b)) +
+  labs(fill = "Effort") +
+  scale_fill_viridis_c(begin = 0, end = 1) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = nutria) +
+  theme_light()
+
+ggplot() +
+  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = 1-exp(-lambda))) +
+  labs(fill = "Présence potentielle estimée du ragondin") +
+  scale_fill_viridis_c(begin = 0, end = 1) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = nutria) +
+  theme_light()
+
 
 ###################################
-# avec multiples détections par cellules -> ne marche pas... 
+# avec multiples détections par cellules 
 ###################################
 
 # Effort avec les distances aux routes
 
 # Bayesian version of the Koshkina (2017) model.
 code <- nimbleCode({
-  # latent-state model
   for(pixel in 1:npixel){
-    # latent state linear predictor
-    #
-    # x_s  = covariates for latent state
-    # beta = latent state model regression coefficients
-    # cell_area = log area of grid cell
-    #
-    
     log(lambda[pixel]) <- beta[1] +
       beta[2] * x_1[pixel] +
       beta[3] * x_2[pixel] +
@@ -464,43 +556,23 @@ code <- nimbleCode({
       beta[7] * x_6[pixel] +
       beta[8] * x_7[pixel] +
       beta[9] * x_8[pixel] + cell_area[pixel]
-    # Species presence in a gridcell as a Bernoulli trial
-    N[pixel] ~ dpois(exp(-lambda[pixel]))
-    # presence only thinning prob linear predictor
-    #
-    # h_s = covariates for thinning probability
-    # alpha  = presence-only data model regression coefficients
-    #
+
+    # z[pixel] ~ dbern(1 - exp(-lambda[pixel]))
+
     logit(b[pixel]) <-  alpha[1] + alpha[2] * h_1[pixel] + alpha[3] * h_2[pixel]
   }
-  # The presence only data model.
-  #
-  # This part of the model just uses the
-  #  what we have calculated above (lambda
-  #  and b). The denominator of this likelihood
-  #  is actually a scalar so we can calculate it
-  #  outside of a for loop. Let's do that first.
-  #
-  # The presence_only data model denominator, which
-  #  is the thinned poisson process across the
-  #  whole region (divided by the total number of
-  #  data points because it has to be
-  #  evaluated for each data point).
-  # m is the number of presence-only data points
-  po_denominator <- inprod(lambda[1:npixel], b[1:npixel]) / m
-  #
-  # Loop through each presence-only data point
-  #  using Bernoulli one's trick. The numerator
-  #  is just the thinned poisson process for
-  #  the ith data point.
-  #  po_pixel denotes the grid cell of the ith presence only data point
-  for(po in 1:m){
-    ones[po] ~ dbern(
+ 
+  obs_denominator <- inprod(lambda[1:npixel], b[1:npixel]) / nobs
+  
+  # on fait ici une boucle sur les observation et non les cellules contenant une observation
+  for(obs in 1:nobs){
+    ones[obs] ~ dbern(
       exp(
-        nobs_pixel[po]*log(lambda[po_pixel[po]] * b[po_pixel[po]]) -
-          po_denominator)   # modif ici pour prendre en compte le nombre d'observations par pixel : nobs_pixel[po]
-      / CONSTANT) # attention, voir issue https://github.com/mfidino/integrated-occupancy-model/issues/1
+        log(lambda[po_pixel[obs]] * b[po_pixel[obs]]) -
+          obs_denominator)   
+      / CONSTANT) 
   }
+  
   # Priors for latent state model
   for(i in 1:9){
     beta[i] ~ dnorm(0, sd = 2)
@@ -513,11 +585,18 @@ code <- nimbleCode({
   # zsum <- sum(z[1:npixel])
 })
 
-pixel.id.det <- grid_selec$grid_id[grid_selec$nnutria > 0] # les ID des cellules où il y a au moins une occurrence
+# les ID des cellules où il y a au moins une occurrence
+pixel.id.det <- grid_selec$grid_id[grid_selec$nnutria > 0] 
 
+# nombre de cellules
 npix <- nrow(grid_selec)
+
+# aire des cellules
 s.area <- as.numeric(units::set_units(grid_selec$area,"km^2")) # si les cellules sont d'aires identiques
 logarea <- log(s.area)
+
+# nombre d'observations
+nobs = sum(grid_selec$nnutria[grid_selec$nnutria > 0])
 
 data <- list(
   cell_area = logarea,
@@ -531,33 +610,37 @@ data <- list(
   x_8 = scale(grid_selec$lgr_rivieres)[,1],
   h_1 = scale(grid_selec$lgr_chemins)[,1],
   h_2 = scale(grid_selec$lgr_routes)[,1],
-  ones = rep(1, length(pixel.id.det)))
+  ones = rep(1, nobs))
+
+# pixel associé aux observations (avec répétition)
+po_pixel <- NULL
+for (i in 1:length(pixel.id.det)){
+  po_pixel <- c(po_pixel, rep(pixel.id.det[i], grid_selec$nnutria[pixel.id.det[i]]))
+}
 
 constants <- list(
   npixel = npix,
-  m = length(pixel.id.det),
-  CONSTANT = 50000, # problème : la constante à choisir pour guarantir proba ! 
-  po_pixel = pixel.id.det,
-  nobs_pixel = grid_selec$nnutria[grid_selec$nnutria > 0]) # modifié pour prendre en compte toutes les détections
+  nobs = nobs,
+  CONSTANT = 50000, 
+  po_pixel = po_pixel) 
 
-Ninit <- numeric(npix)
-Ninit[pixel.id.det] <- grid_selec$nnutria[pixel.id.det]
+zinit <- numeric(npix)
+zinit[pixel.id.det] <- 1
 inits <- function(){
   list(
     beta = rnorm(9, 0, 1),
-    alpha = rnorm(3, 0, 1),
-    N = Ninit # pourquoi mis en commentaire dans code initial ?
+    alpha = rnorm(3, 0, 1)
+    # z = zinit # pourquoi mis en commentaire dans code initial ?
   )
 }
 
-params <- c("alpha", "beta", "N")
+params <- c("alpha", "beta")
 
 # MCMC settings (pour tester...)
 nc <- 2
 nburn <- 5000 #5000
 ni <- nburn + 10000 #30000
 nt <- 1
-
 
 # run the model!
 set.seed(123)
@@ -583,20 +666,74 @@ MCMCplot(out, params = "beta")
 
 res <- rbind(out$chain1, out$chain2)
 
+# select alpha
+mask <- str_detect(colnames(res), "alpha")
+res_alpha <- res[,mask]
+alphaestim <- apply(res_alpha, 2, median)
+alphamoy <- apply(res_alpha, 2, mean)
+
+# select beta
+mask <- str_detect(colnames(res), "beta")
+res_beta <- res[,mask]
+betaestim <- apply(res_beta, 2, median)
+betamoy <- apply(res_beta, 2, mean)
+
+# lambda et b
+grid_selec$lambda <- exp(betaestim[1] +
+                           betaestim[2] * data$x_1 +
+                           betaestim[3] * data$x_2 +
+                           betaestim[4] * data$x_3 +
+                           betaestim[5] * data$x_4 +
+                           betaestim[6] * data$x_5 +
+                           betaestim[7] * data$x_6 +
+                           betaestim[8] * data$x_7 +
+                           betaestim[9] * data$x_8 + data$cell_area)
+grid_selec$b <- plogis(alphaestim[1] +
+                         alphaestim[2] * data$h_1 +
+                         alphaestim[3] * data$h_2)
+
+# lambda_tronc <- grid_selec$lambda
+# lambda_tronc[lambda_tronc > 50] <- 50
+
+# plot
+ggplot() +
+  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = lambda_tronc)) +
+  labs(fill = "Intensité") +
+  scale_fill_viridis_c(begin = 0, end = 1) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = nutria) +
+  theme_light()
+
+ggplot() +
+  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = b)) +
+  labs(fill = "Effort") +
+  scale_fill_viridis_c(begin = 0, end = 1) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = nutria) +
+  theme_light()
+
+ggplot() +
+  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = 1-exp(-lambda))) +
+  labs(fill = "Présence potentielle estimée du ragondin") +
+  scale_fill_viridis_c(begin = 0, end = 1) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = nutria) +
+  theme_light()
+
 # select z
-mask <- str_detect(colnames(res), "N")
-res_N <- res[,mask]
-grid_selec$Nestim <- apply(res_N, 2, median)
-grid_selec$Nmoy <- apply(res_N, 2, mean)
+mask <- str_detect(colnames(res), "z")
+res_z <- res[,mask]
+grid_selec$zestim <- apply(res_z, 2, median)
+grid_selec$zmoy <- apply(res_z, 2, mean)
 
 # viz
 ggplot() +
-  geom_sf(data = grid_selec, lwd = 0.1, aes(fill = as_factor(Nestim))) +
+  geom_sf(data = grid_selec, lwd = 0.1, aes(fill = as_factor(zestim))) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
 ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = Nmoy)) +
+  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = zmoy)) +
   scale_fill_viridis_c() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()

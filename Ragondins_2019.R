@@ -33,6 +33,13 @@ nutria <- st_read("Data/Data_pts_test_infos.shp") %>%
   filter(year == 2019) %>%
   filter(nomvern == "Ragondin") 
 
+# changement de format
+occitanie <- occitanie %>%
+  st_transform(crs = st_crs(nutria))
+
+# intersection avec occitanie
+nutria <- st_intersection(nutria, occitanie)
+
 # plot des données 
 p <- ggplot() +
   geom_sf(data = occitanie, fill = "white", color = "black", lwd = .5) + 
@@ -41,13 +48,6 @@ p <- ggplot() +
   theme_void()
 p
 # ggsave(plot = p, "fig/map.png", dpi = 600)
-
-# changement de format
-occitanie <- occitanie %>%
-  st_transform(crs = st_crs(nutria))
-
-# intersection avec occitanie
-nutria <- st_intersection(nutria, occitanie)
 
 #####################
 # Création de la grille
