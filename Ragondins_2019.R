@@ -51,8 +51,11 @@ p
 
 #####################
 # Création de la grille
-n = 25
-grid <- st_make_grid(occitanie, n = n, what = "polygons", square = FALSE)
+# n = 25
+# grid <- st_make_grid(occitanie, n = n, what = "polygons", square = FALSE)
+
+grid_area <- units::set_units(5000000,"m^2") #5km2
+grid <- st_make_grid(occitanie, cellsize = grid_area, what = "polygons", square = FALSE)
 
 # sf
 grid_sf <- st_sf(grid)
@@ -80,11 +83,11 @@ grid_sf <- grid_sf %>%
 # Surface exacte des cellules en occitanie
 grid_sf$area <- st_area(st_intersection(grid_sf, occitanie))
 
-# deux intersections nulles, faut-il les enlever ?
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric((as.numeric(area)==0)))) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# # intersections nulles, faut-il les enlever ?
+# ggplot() +
+#   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric((as.numeric(area)==0)))) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
 ######################
 # Ragondins par cellules
@@ -191,13 +194,13 @@ ggplot() +
           fill = NA)
 
 # avec la grille (2019 uniquement)
-temp_min <- terra::extract(toccitanie_min, grid_sf, # exact = T, # pour toutes les cellules... 
+temp_min <- terra::extract(toccitanie_min, grid_sf # exact = T, # pour toutes les cellules...
     ) %>%
   group_by(ID) %>%
   summarise(tmin2019 = mean(lyr.17, na.rm = T))
 
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = temp_min$tmin2019)) +
+  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = temp_min$tmin2019)) +
   scale_fill_viridis_c() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
@@ -217,7 +220,7 @@ grid_sf$temp_min <- temp_min$tmin2019
 grid_sf$temp_max <- temp_max$tmax2019
 grid_sf$temp_mean <- temp_mean$tmean2019
 
-# save(grid_sf, file = "Data/grid_sf_c.RData")
+# save(grid_sf, file = "grid_sf_5km2.RData")
 
 ######################
 # Précipitations
@@ -260,7 +263,7 @@ prec_cum <- terra::extract(poccitanie_cum, grid_sf) %>%
   )
 
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = prec_cum$pcum2019)) +
+  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = prec_cum$pcum2019)) +
   scale_fill_viridis_c() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
@@ -268,7 +271,7 @@ ggplot() +
 # Ajout de la covariable à grid_sf
 grid_sf$prec_cum <- prec_cum$pcum2019
 
-# save(grid_sf, file = "Data/grid_sf_c.RData")
+# save(grid_sf, file = "grid_sf_5km2.RData")
 
 ######################
 # Variables de sol
@@ -302,7 +305,7 @@ grid_sf <- grid_sf %>%
   select(-aera_agri)
 
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(agri_cover))) +
+  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = as.numeric(agri_cover))) +
   scale_fill_viridis_c(
     labels = scales::percent_format()
   ) +
@@ -310,7 +313,7 @@ ggplot() +
   theme_void()
 
 # Cellules manquantes ! 
-# save(grid_sf, file = "Data/grid_sf_c.RData")
+# save(grid_sf, file = "grid_sf_5km2.RData")
 
 
 ######################
@@ -320,6 +323,14 @@ pop <- st_read("Data/pop2021.gpkg")
 pop <- pop %>% 
   st_transform(crs = st_crs(grid_sf)) %>%
   st_intersection(occitanie)
+
+ggplot() +
+  geom_sf(data = pop, lwd = 0.1, color = NA, aes(fill = TOT_P_2021)) +
+  scale_fill_viridis_c() +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  theme_void()
+
+# la frontière n'est pas donnée !
 
 # Avec la grille
 grid_pop <- pop %>%
@@ -343,7 +354,7 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "Data/grid_sf_c.RData")
+# save(grid_sf, file = "Data/grid_sf_5km2.RData")
 
 
 ######################
@@ -378,7 +389,7 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "Data/grid_sf_c.RData")
+# save(grid_sf, file = "Data/grid_sf_5km2.RData")
 
 ######################
 # Longueur de routes
@@ -390,7 +401,7 @@ unique(roads$CLASS_ADM)
 routes_occ <- roads %>%
   st_transform(crs = st_crs(grid_sf)) %>%
   st_intersection(occitanie) %>%
-  filter(CLASS_ADM %in% c("D\xe9partementale","Nationale"))
+  filter(CLASS_ADM != "Autoroute" & CLASS_ADM !="Sans objet") # D\xe9partementale ne marche pas...
 
 # Avec la grille
 grid_route <- routes_occ  %>%
@@ -414,7 +425,7 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "Data/grid_sf_c.RData")
+# save(grid_sf, file = "Data/grid_sf_5km2.RData")
 
 ######################
 # Longueur de cours d'eau
@@ -482,7 +493,7 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "Data/grid_sf_c.RData")
+# save(grid_sf, file = "Data/grid_sf_5km2.RData")
 
 ######################
 # Proportion de plan d'eau
@@ -532,18 +543,19 @@ plan_eau_occ <- plan_eau %>%
   st_intersection(occitanie)
 
 # Avec la grille
-grid_plan <- plan_eau_occ  %>%
-  st_intersection(grid_sf) %>%
-  mutate(area = st_area(.)) %>%
+grid_plan <- 
+  # plan_eau_occ  %>%
+  st_intersection(plan_eau_occ, grid_sf) %>%
+  mutate(area_eau = st_area(.)) %>%
   group_by(grid_id) %>%
-  summarise(aera_eau = sum(area)) %>%
+  summarise(area_eau_tot = sum(area_eau)) %>%
   as_tibble() %>%
   select(-geometry)
 
 grid_sf <- grid_sf %>% 
   full_join(grid_plan, by = "grid_id") %>%
-  mutate(.before = 1, surface_en_eau = aera_eau/area) %>%
-  select(-aera_eau)
+  mutate(.before = 1, surface_en_eau = area_eau_tot/area) %>%
+  select(-area_eau_tot)
 
 ggplot() +
   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(surface_en_eau))) +
@@ -553,7 +565,7 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "grid_sf_c.RData")
+# save(grid_sf, file = "grid_sf_5km2.RData")
 
 ######################
 # Observations toutes espèces (GBIF)
@@ -612,11 +624,11 @@ glimpse(gbif_data)  # Aperçu des colonnes disponibles
 # On garde uniquement les colonnes utiles pour l'analyse :
 gbif_clean <- gbif_data %>%
   select(species, class, order, family, decimalLatitude, decimalLongitude, year, basisOfRecord)
+
 head(gbif_clean)
 
 # Transformer en objet spatial
 gbif_sf <- st_as_sf(gbif_clean, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326) 
-# save(gbif_sf, file = "gbif_sf.RData")
 
 gbif_sf <- gbif_sf %>%
   st_transform(crs = st_crs(occitanie))
@@ -652,9 +664,9 @@ ggplot() +
 
 hist(nobs_gbif)
 
-# avec une troncature à 150 (voir Twinings)
+# avec une troncature à 50 (voir Twinings)
 # Troncature
-nobs_gbif[nobs_gbif>=150] <- 150
+nobs_gbif[nobs_gbif>=50] <- 50
 
 # sur une carte
 ggplot() +
@@ -673,6 +685,6 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "grid_sf.RData")
+# save(grid_sf, file = "grid_sf_5km2.RData")
 
 

@@ -51,5 +51,6 @@ rsconnect/
 # Data
 /Data
 
-# Correction
+# Dossiers non suivis
 /Anciens_codes
+/Donnees_inutiles

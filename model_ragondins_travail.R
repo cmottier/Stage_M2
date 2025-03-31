@@ -22,8 +22,8 @@ grid_selec$surface_en_eau[is.na(grid_selec$surface_en_eau)] <- 0
 grid_selec$lgr_rivieres[is.na(grid_selec$lgr_rivieres)] <- 0
 grid_selec$lgr_routes[is.na(grid_selec$lgr_routes)] <- 0
 grid_selec$lgr_chemins[is.na(grid_selec$lgr_chemins)] <- 0
-grid_selec$logdensity[is.na(grid_selec$logdensity)] <- 0
-grid_selec$logdensity[is.infinite(grid_selec$logdensity)] <- -50 # valeur artificielle à déterminer ? 
+grid_selec$logdensity[is.na(grid_selec$logdensity)] <- -50 # valeur artificielle à déterminer (problème de frontière)
+grid_selec$logdensity[is.infinite(grid_selec$logdensity)] <- -50 # valeur artificielle à déterminer 
 grid_selec$agri_cover[is.na(grid_selec$agri_cover)] <- 0
 
 ################################################################################
