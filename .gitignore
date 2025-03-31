@@ -51,6 +51,5 @@ rsconnect/
 # Data
 /Data
 
-# Divers dossiers
-/Essai_correction
-/Donnees_inutiles
+# Correction
+/Anciens_codes
