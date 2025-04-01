@@ -537,10 +537,14 @@ rm(list=c("Ariege", "Aude","Aveyron","Gard","Gers","HauteGaronne",
 # à voir s'il faut faire un tri
 unique(plan_eau$NATURE)
 
-# rivières d'Occitanie
+# plans d'eau d'Occitanie
 plan_eau_occ <- plan_eau %>%
   st_transform(crs = st_crs(grid_sf)) %>%
   st_intersection(occitanie)
+
+# # on enlève les superpositions
+# plan_eau_occ <- plan_eau_occ %>%
+#   st_union()
 
 # Avec la grille
 grid_plan <- 
