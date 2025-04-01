@@ -138,8 +138,8 @@ constants <- list(
   CONSTANT = 50000,
   po_pixel = pixel.id.det) 
 
-zinit <- numeric(npix)
-zinit[pixel.id.det] <- 1
+# zinit <- numeric(npix)
+# zinit[pixel.id.det] <- 1
 inits <- function(){
   list(
     beta = rnorm(9, 0, 1), 
@@ -202,7 +202,7 @@ out_env <- nimbleMCMC(
 end <- Sys.time()
 end - start
 
-# save(out_env, file = "out_env.RData")
+# save(out_env, file = "out_env_5km2.RData")
 
 MCMCsummary(out_env)
 
@@ -263,7 +263,7 @@ grid_selec$b <- plogis(alphaestim[1] +
 
 # plot
 p_lambda <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = lambda)) +
+  geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = lambda)) +
   labs(fill = "Intensité") +
   scale_fill_viridis_c(begin = 0, end = 1) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
@@ -273,7 +273,7 @@ p_lambda
 # ggsave(plot = p_lambda, "Images/map_intensite_env.png", dpi = 600)
 
 p_b <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = b)) +
+  geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = b)) +
   labs(fill = "Effort") +
   scale_fill_viridis_c(begin = 0, end = 1) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
@@ -283,14 +283,14 @@ p_b
 # ggsave(plot = p_b, "Images/map_effort_env.png", dpi = 600)
 
 p_p <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = 1-exp(-lambda))) +
+  geom_sf(data = st_intersection(grid_selec, occitanie), color= NA, aes(fill = 1-exp(-lambda))) +
   labs(fill = "Présence potentielle estimée du ragondin") +
   scale_fill_viridis_c(begin = 0, end = 1) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   # geom_sf(data = nutria) +
   theme_light()
 p_p
-ggsave(plot = p_p, "Images/map_presence_env.png", dpi = 600)
+# ggsave(plot = p_p, "Images/map_presence_env.png", dpi = 600)
 
 
 ################################################################################
@@ -394,8 +394,8 @@ constants <- list(
   CONSTANT = 50000,
   po_pixel = pixel.id.det) 
 
-zinit <- numeric(npix)
-zinit[pixel.id.det] <- 1
+# zinit <- numeric(npix)
+# zinit[pixel.id.det] <- 1
 inits <- function(){
   list(
     beta = rnorm(9, 0, 1), 
@@ -459,7 +459,7 @@ out_gbif <- nimbleMCMC(
 end <- Sys.time()
 end - start
 
-# save(out_gbif, file = "out_gbif.RData")
+# save(out_gbif, file = "out_gbif_5km2.RData")
 
 MCMCsummary(out_gbif)
 
@@ -520,7 +520,7 @@ grid_selec$b <- plogis(alphaestim[1] +
 
 # plot
 p_lambda <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = lambda)) +
+  geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = lambda)) +
   labs(fill = "Intensité") +
   scale_fill_viridis_c(begin = 0, end = 1) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
@@ -530,7 +530,7 @@ p_lambda
 # ggsave(plot = p_lambda, "Images/map_intensite_gbif.png", dpi = 600)
 
 p_b <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = b)) +
+  geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = b)) +
   labs(fill = "Effort") +
   scale_fill_viridis_c(begin = 0, end = 1) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
@@ -540,7 +540,7 @@ p_b
 # ggsave(plot = p_b, "Images/map_effort_gbif.png", dpi = 600)
 
 p_p <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = 1-exp(-lambda))) +
+  geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = 1-exp(-lambda))) +
   labs(fill = "Présence potentielle estimée du ragondin") +
   scale_fill_viridis_c(begin = 0, end = 1) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
@@ -635,8 +635,8 @@ constants <- list(
   CONSTANT = 50000, 
   po_pixel = po_pixel) 
 
-zinit <- numeric(npix)
-zinit[pixel.id.det] <- 1
+# zinit <- numeric(npix)
+# zinit[pixel.id.det] <- 1
 inits <- function(){
   list(
     beta = rnorm(9, 0, 1),
@@ -670,11 +670,12 @@ out_env_mult <- nimbleMCMC(
 end <- Sys.time()
 end - start
 
-save(out_env_mult, file = "out_env_mult.RData")
+# save(out_env_mult, file = "out_env_mult_5km2.RData")
 
 MCMCsummary(out_env_mult)
 
 MCMCtrace(out_env_mult, pdf = FALSE, ind = TRUE, params = "alpha")
+MCMCtrace(out_env_mult, pdf = FALSE, ind = TRUE, params = "beta")
 MCMCplot(out_env_mult, params = "beta")
 
 res <- rbind(out_env_mult$chain1, out_env_mult$chain2)
@@ -710,7 +711,7 @@ lambda_tronc[lambda_tronc > 50] <- 50
 
 # plot
 p_lambda <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = lambda)) +
+  geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = lambda)) +
   labs(fill = "Intensité") +
   scale_fill_viridis_c(begin = 0, end = 1) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
@@ -721,7 +722,7 @@ p_lambda
 # ggsave(plot = p_lambda, "Images/map_intensite_env_mult.png", dpi = 600)
 
 p_b <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = b)) +
+  geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = b)) +
   labs(fill = "Effort") +
   scale_fill_viridis_c(begin = 0, end = 1) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
@@ -732,7 +733,7 @@ p_b
 # ggsave(plot = p_b, "Images/map_effort_env_mult.png", dpi = 600)
 
 p_p <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = 1-exp(-lambda))) +
+  geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = 1-exp(-lambda))) +
   labs(fill = "Présence potentielle estimée du ragondin") +
   scale_fill_viridis_c(begin = 0, end = 1) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +

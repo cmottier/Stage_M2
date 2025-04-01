@@ -544,20 +544,22 @@ plan_eau_occ <- plan_eau %>%
 
 # # on enlève les superpositions
 # plan_eau_occ <- plan_eau_occ %>%
-#   st_union()
+#   st_union() %>%
+#   st_cast("POLYGON")
 
 # Avec la grille
-grid_plan <- 
-  # plan_eau_occ  %>%
-  st_intersection(plan_eau_occ, grid_sf) %>%
-  mutate(area_eau = st_area(.)) %>%
-  group_by(grid_id) %>%
-  summarise(area_eau_tot = sum(area_eau)) %>%
+grid_plan <-  plan_eau_occ  %>%
+  st_intersection(grid_sf) 
+
+grid_plan_union <- grid_plan %>% 
+  group_by(grid_id) %>% 
+  summarise(geometry = st_union(geometry)) %>% # pour enlever les chevauchements étranges...
+  mutate(area_eau_tot = st_area(.)) %>%
   as_tibble() %>%
   select(-geometry)
 
 grid_sf <- grid_sf %>% 
-  full_join(grid_plan, by = "grid_id") %>%
+  full_join(grid_plan_union, by = "grid_id") %>%
   mutate(.before = 1, surface_en_eau = area_eau_tot/area) %>%
   select(-area_eau_tot)
 
