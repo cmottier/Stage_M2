@@ -542,11 +542,6 @@ plan_eau_occ <- plan_eau %>%
   st_transform(crs = st_crs(grid_sf)) %>%
   st_intersection(occitanie)
 
-# # on enlève les superpositions
-# plan_eau_occ <- plan_eau_occ %>%
-#   st_union() %>%
-#   st_cast("POLYGON")
-
 # Avec la grille
 grid_plan <-  plan_eau_occ  %>%
   st_intersection(grid_sf) 
@@ -572,6 +567,42 @@ ggplot() +
   theme_void()
 
 # save(grid_sf, file = "grid_sf_5km2.RData")
+
+######################
+# Distance aux plans d'eau
+
+# # distance aux plans d'eau
+# dist_eau <- st_distance(grid_sf, st_transform(plan_eau, crs = st_crs(grid_sf)))
+# # save(dist_eau, file = "RData/dist_eau.RData")
+# 
+# # On regarde la distance minimale
+# grid_sf$dist_plan_eau <- apply(dist_eau, 1, min)
+
+# Pour essayer d'être plus efficace en utilisant un buffer
+# # format -> utile ?
+# plan_eau <- plan_eau %>%
+#   st_transform(crs = st_crs(grid_sf))
+
+dist = 50000 # rayon de recherche autour de la cellule
+dist_buff <- function (i) {
+  cell = grid_sf[i,]
+  buffer <- st_buffer(cell, dist) 
+  plan_filtre <- plan_eau[st_intersects(plan_eau, buffer, sparse = F),]
+  return(min(st_distance(cell, plan_filtre)))
+}
+
+for (i in 1:nrow(grid_sf)) {
+  grid_sf$dist_plan_eau[i] <- dist_buff(i)
+}
+
+ggplot() +
+  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = dist_plan_eau)) +
+  scale_fill_viridis_c(
+  ) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  theme_void()
+
+# save(grid_sf, file = "RData/grid_sf.RData")
 
 ######################
 # Observations toutes espèces (GBIF)

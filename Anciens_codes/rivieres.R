@@ -98,12 +98,7 @@ plan_eau <- Ariege %>%
   rbind(Tarn) %>%
   rbind(TarnetGaronne) %>%
   sf::st_transform(crs = st_crs(occitanie)) %>%
-  sf::st_simplify() 
-# si probleme :
-# sf_use_s2(FALSE)
-
-
-
+  sf::st_simplify()
 
 rm(list=c("Ariege", "Aude","Aveyron","Gard","Gers","HauteGaronne",
           "HautesPyrenees","Herault","Lot","Lozere","PyreneesOrientales","Tarn","TarnetGaronne"))
@@ -111,20 +106,30 @@ rm(list=c("Ariege", "Aude","Aveyron","Gard","Gers","HauteGaronne",
 # à voir s'il faut faire un tri
 unique(plan_eau$NATURE)
 
-# avec la grille
+# format
+plan_eau <- plan_eau %>%
+  st_transform(crs = st_crs(grid_sf))
+
+# plans d'eau d'Occitanie
 plan_eau_occ <- plan_eau %>%
   st_transform(crs = st_crs(grid_sf)) %>%
-  st_intersection(grid_sf) %>%
-  mutate(area = st_area(.)) %>%
-  group_by(grid_id) %>%
-  summarise(aera_eau = sum(area)) %>%
+  st_intersection(occitanie)
+
+# Avec la grille
+grid_plan <-  plan_eau_occ  %>%
+  st_intersection(grid_sf) 
+
+grid_plan_union <- grid_plan %>% 
+  group_by(grid_id) %>% 
+  summarise(geometry = st_union(geometry)) %>% # pour enlever les chevauchements étranges...
+  mutate(area_eau_tot = st_area(.)) %>%
   as_tibble() %>%
   select(-geometry)
 
 grid_sf <- grid_sf %>% 
-  full_join(plan_eau_occ, by = "grid_id") %>%
-  mutate(.before = 1, surface_en_eau = aera_eau/area) %>%
-  select(-aera_eau)
+  full_join(grid_plan_union, by = "grid_id") %>%
+  mutate(.before = 1, surface_en_eau = area_eau_tot/area) %>%
+  select(-area_eau_tot)
 
 ggplot() +
   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(surface_en_eau))) +
@@ -149,4 +154,30 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
+# Pour essayer d'être plus efficace...
+dist = 15000 # rayon de recherche autour de la cellule
+f_buff <- function (i) {
+  cell = grid_sf[i,]
+  buffer <- st_buffer(cell, dist) 
+  plan_filtre <- plan_eau[st_intersects(plan_eau, buffer, sparse = F),]
+  return(min(st_distance(cell, plan_filtre)))
+}
 
+for (i in 1:nrow(grid_sf)) {
+  grid_sf$dist_plan_eau[i] <- f_buff(i)
+}
+# apply ne marche pas...
+
+ggplot() +
+  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(dist_plan_eau))) +
+  scale_fill_viridis_c(
+  ) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  theme_void()
+
+ggplot() +
+  geom_sf(data = grid_sf[14,]) +
+  geom_sf(data = st_buffer(grid_sf[14,], dist), fill = NA) +
+  geom_sf(data=plan_eau_occ[st_intersects(plan_eau_occ, st_buffer(grid_sf[14,], dist), sparse = F),])
+
+min(st_distance(grid_sf[14,], plan_eau_occ[st_intersects(plan_eau_occ, st_buffer(grid_sf[14,], dist), sparse = F),]))
