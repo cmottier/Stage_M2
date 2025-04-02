@@ -496,6 +496,31 @@ ggplot() +
 # save(grid_sf, file = "Data/grid_sf_5km2.RData")
 
 ######################
+# Distance aux rivières
+
+dist = 10000 # rayon de recherche autour de la cellule
+dist_buff <- function (i) {
+  cell = grid_sf[i,]
+  buffer <- st_buffer(cell, dist) 
+  plan_filtre <- river_lines[st_intersects(river_lines, buffer, sparse = F),]
+  return(min(st_distance(cell, plan_filtre)))
+}
+# renvoit des Inf si pas d'intersection
+
+for (i in 1:nrow(grid_sf)) {
+  grid_sf$dist_rivieres[i] <- dist_buff(i)
+}
+
+ggplot() +
+  geom_sf(data = grid_sf, color = NA, aes(fill = dist_rivieres)) +
+  scale_fill_viridis_c(
+  ) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  theme_void()
+
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
+
+######################
 # Proportion de plan d'eau
 # https://bdtopoexplorer.ign.fr/detail_hydrographique
 
@@ -583,26 +608,27 @@ ggplot() +
 # plan_eau <- plan_eau %>%
 #   st_transform(crs = st_crs(grid_sf))
 
-dist = 50000 # rayon de recherche autour de la cellule
+dist = 30000 # rayon de recherche autour de la cellule
 dist_buff <- function (i) {
   cell = grid_sf[i,]
   buffer <- st_buffer(cell, dist) 
   plan_filtre <- plan_eau[st_intersects(plan_eau, buffer, sparse = F),]
   return(min(st_distance(cell, plan_filtre)))
 }
+# renvoit des Inf si pas d'intersection
 
 for (i in 1:nrow(grid_sf)) {
   grid_sf$dist_plan_eau[i] <- dist_buff(i)
 }
 
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = dist_plan_eau)) +
+  geom_sf(data = grid_sf, color = NA, aes(fill = dist_plan_eau)) +
   scale_fill_viridis_c(
   ) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "RData/grid_sf.RData")
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
 ######################
 # Observations toutes espèces (GBIF)
