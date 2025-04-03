@@ -191,7 +191,9 @@ out_env <- nimbleMCMC(
   niter = ni,
   nburnin = nburn,
   nchains = nc,
-  thin = nt)
+  thin = nt,
+  # WAIC = TRUE
+  )
 end <- Sys.time()
 end - start
 
@@ -631,7 +633,9 @@ out_env_mult <- nimbleMCMC(
   niter = ni,
   nburnin = nburn,
   nchains = nc,
-  thin = nt)
+  thin = nt, 
+  # WAIC = TRUE
+  )
 end <- Sys.time()
 end - start
 
