@@ -1,8 +1,8 @@
-#######################
-# Ragondins 2019 uniquement
-#######################
+################################################################################
+#                         Ragondins 2019 uniquement                            #
+################################################################################
 
-# librairies utiles
+# librairies utiles ------------------------------------------------------------
 
 library(nimble)
 library(MCMCvis)
@@ -12,9 +12,11 @@ library(sf)
 library(tidyterra)
 library(lubridate)
 library(KrigR)
+library(rgbif)
 
-#######################
-# Occitanie
+# Occitanie et données de ragondins --------------------------------------------
+
+## Occitanie ###############
 
 # contours des départements d'Occitanie
 dpts_occitanie <- st_read("Data/departements-d-occitanie.shp") 
@@ -24,8 +26,7 @@ occitanie <- dpts_occitanie %>% st_union()
 
 rm(dpts_occitanie)
 
-#######################
-# Ragondins Occitanie 2019
+## Ragondins 2019 #############
 
 # Import des données
 nutria <- st_read("Data/Data_pts_test_infos.shp") %>%
@@ -49,8 +50,8 @@ p <- ggplot() +
 p
 # ggsave(plot = p, "fig/map.png", dpi = 600)
 
-#####################
-# Création de la grille
+## Grille ###################
+
 # n = 25
 # grid <- st_make_grid(occitanie, n = n, what = "polygons", square = FALSE)
 
@@ -89,16 +90,13 @@ grid_sf$area <- st_area(st_intersection(grid_sf, occitanie))
 #   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
 #   theme_void()
 
-######################
-# Ragondins par cellules
-
-# Nombre d'observations par cellule
+# Nombre d'observations de ragondins par cellules
 # https://gis.stackexchange.com/questions/323698/counting-points-in-polygons-with-sf-package-of-r
 grid_sf$nnutria <- lengths(st_intersects(grid_sf, nutria))
 
 table(grid_sf$nnutria)
 
-# cellules ayant au moins une observation
+# Cellules ayant au moins une observation
 nutria_count <- filter(grid_sf, nnutria > 0)
 
 # plot
@@ -112,9 +110,9 @@ nutria_count %>%
   geom_sf(data = nutria) + 
   theme_void()
 
-######################
-# Variables explicatives
-######################
+
+# Variables explicatives -------------------------------------------------------
+
 # elles doivent toutes être intersectées avec Occitanie
 # et ramenées à des variables par unité d'aire
 
@@ -136,8 +134,8 @@ occitanie_raster <- st_bbox(c(xmin = -0.4,
   terra::vect() %>%
   terra::rast()
 
-######################
-# Températures
+## Températures ####################
+
 toccitanie <- CDownloadS(
   Variable = "2m_temperature",
   DataSet = "reanalysis-era5-land-monthly-means",
@@ -156,9 +154,6 @@ toccitanie <- CDownloadS(
 
 toccitanie <- weathermetrics::kelvin.to.celsius(toccitanie)
 
-# save(toccitanie, file = "Data/toccitanie.RData")
-# load("Data/toccitanie.RData") marche pas...
-
 # variables annuelles de 2003 (1) à 2024 (22)
 # mois min
 toccitanie_min <- terra::aggregate(toccitanie, fact=c(1,1,12), fun=min)
@@ -167,7 +162,7 @@ toccitanie_max <- terra::aggregate(toccitanie, fact=c(1,1,12), fun=max)
 # mois mean
 toccitanie_mean <- terra::aggregate(toccitanie, fact=c(1,1,12), fun=mean)
 
-# moyenne des voisins pour cellules manquantes (à voir si nécessaire)
+# moyenne des voisins pour cellules manquantes 
 weight_matrix <- matrix(1, nrow=3, ncol=3)
 weight_matrix[2,2] <- NA
 toccitanie_min <- terra::focal(toccitanie_min, w=weight_matrix, fun = mean, na.policy = "only", na.rm = T)
@@ -222,8 +217,8 @@ grid_sf$temp_mean <- temp_mean$tmean2019
 
 # save(grid_sf, file = "grid_sf_5km2.RData")
 
-######################
-# Précipitations
+## Précipitations ####################
+
 poccitanie <- CDownloadS(
   Variable = "total_precipitation",
   DataSet = "reanalysis-era5-land-monthly-means",
@@ -273,8 +268,7 @@ grid_sf$prec_cum <- prec_cum$pcum2019
 
 # save(grid_sf, file = "grid_sf_5km2.RData")
 
-######################
-# Variables de sol
+## Surface agricole ####################
 
 # Données de CORINE révisées 2012 (faut-il tenir compte de l'évolution ?)
 Cori12 <- st_read("Data/CLC12_RLRMP_RGF.shp")
@@ -316,8 +310,7 @@ ggplot() +
 # save(grid_sf, file = "grid_sf_5km2.RData")
 
 
-######################
-# Densité de population 
+## Densité de population ####################
 
 pop <- st_read("Data/pop2021.gpkg")
 pop <- pop %>% 
@@ -357,8 +350,7 @@ ggplot() +
 # save(grid_sf, file = "Data/grid_sf_5km2.RData")
 
 
-######################
-# Longueur de chemins
+## Longueur de chemins ####################
 
 # OpenStreetMap https://www.data.gouv.fr/fr/datasets/itineraires-de-randonnee-dans-openstreetmap/
 chemins_osm <- st_read("Data/hiking_foot_routes_lineLine.shp")
@@ -391,8 +383,7 @@ ggplot() +
 
 # save(grid_sf, file = "Data/grid_sf_5km2.RData")
 
-######################
-# Longueur de routes
+## Longueur de routes ####################
 
 roads <- st_read("Data/TRONCON_ROUTE.shp")
 str(roads)
@@ -427,8 +418,8 @@ ggplot() +
 
 # save(grid_sf, file = "Data/grid_sf_5km2.RData")
 
-######################
-# Longueur de cours d'eau
+## Longueur de cours d'eau ####################
+
 # https://bdtopoexplorer.ign.fr/detail_hydrographique
 
 Ariege <- sf::st_read("Data/Rivieres/Ariege/COURS_D_EAU.shp")
@@ -495,22 +486,15 @@ ggplot() +
 
 # save(grid_sf, file = "Data/grid_sf_5km2.RData")
 
-######################
-# Distance aux rivières
+## Distance aux rivières ####################
 
-dist = 10000 # rayon de recherche autour de la cellule
-dist_buff <- function (i) {
-  cell = grid_sf[i,]
-  buffer <- st_buffer(cell, dist) 
-  plan_filtre <- river_lines[st_intersects(river_lines, buffer, sparse = F),]
-  return(min(st_distance(cell, plan_filtre)))
-}
-# renvoit des Inf si pas d'intersection
+# On cherche l'indice de la rivière la plus proche
+index <- st_nearest_feature(grid_sf, river_lines)
 
-for (i in 1:nrow(grid_sf)) {
-  grid_sf$dist_rivieres[i] <- dist_buff(i)
-}
+# On garde la distance associée
+grid_sf$dist_rivieres <- st_distance(grid_sf, river_lines[index,], by_element = TRUE)
 
+# plot
 ggplot() +
   geom_sf(data = grid_sf, color = NA, aes(fill = dist_rivieres)) +
   scale_fill_viridis_c(
@@ -520,8 +504,8 @@ ggplot() +
 
 # save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
-######################
-# Proportion de plan d'eau
+## Proportion de plan d'eau ####################
+
 # https://bdtopoexplorer.ign.fr/detail_hydrographique
 
 # Plan d'eau
@@ -593,34 +577,15 @@ ggplot() +
 
 # save(grid_sf, file = "grid_sf_5km2.RData")
 
-######################
-# Distance aux plans d'eau
+## Distance aux plans d'eau ####################
 
-# # distance aux plans d'eau
-# dist_eau <- st_distance(grid_sf, st_transform(plan_eau, crs = st_crs(grid_sf)))
-# # save(dist_eau, file = "RData/dist_eau.RData")
-# 
-# # On regarde la distance minimale
-# grid_sf$dist_plan_eau <- apply(dist_eau, 1, min)
+# On cherche l'indice du plan d'eau le plus proche
+index <- st_nearest_feature(grid_sf, plan_eau)
 
-# Pour essayer d'être plus efficace en utilisant un buffer
-# # format -> utile ?
-# plan_eau <- plan_eau %>%
-#   st_transform(crs = st_crs(grid_sf))
+# On garde la distance associée
+grid_sf$dist_plan_eau <- st_distance(grid_sf, plan_eau[index,], by_element = TRUE)
 
-dist = 30000 # rayon de recherche autour de la cellule
-dist_buff <- function (i) {
-  cell = grid_sf[i,]
-  buffer <- st_buffer(cell, dist) 
-  plan_filtre <- plan_eau[st_intersects(plan_eau, buffer, sparse = F),]
-  return(min(st_distance(cell, plan_filtre)))
-}
-# renvoit des Inf si pas d'intersection
-
-for (i in 1:nrow(grid_sf)) {
-  grid_sf$dist_plan_eau[i] <- dist_buff(i)
-}
-
+# plot
 ggplot() +
   geom_sf(data = grid_sf, color = NA, aes(fill = dist_plan_eau)) +
   scale_fill_viridis_c(
@@ -630,10 +595,7 @@ ggplot() +
 
 # save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
-######################
-# Observations toutes espèces (GBIF)
-
-library(rgbif)
+## Observations toutes espèces (GBIF) ####################
 
 # Récupération des clés taxonomiques des groupes d'intérêt
 oiseaux_key <- name_backbone(name = "Aves")$usageKey

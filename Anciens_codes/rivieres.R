@@ -64,9 +64,19 @@ ggplot() +
 
 # Essai des distances à la rivière la plus proche
 
+index <- st_nearest_feature(grid_sf[8578:nrow(grid_sf),], river_lines)
+grid_sf$dist_rivieres[8578:nrow(grid_sf)] <- st_distance(grid_sf[8578:nrow(grid_sf),], element[index,])
 
 
+distance_min <- function(cell, grid, element) {
+  index <- st_nearest_feature(grid[cell,], element)
+  retrun(st_distance(grid[cell,], element[index,]))
+}
 
+# on applique aux rivières
+for (i in 7600:nrow(grid_sf)) {
+  grid_sf$dist_rivieres[i] <- distance_min(i, grid_sf, river_lines)
+}
 
 # Plan d'eau
 Ariege <- sf::st_read("Data/Rivieres/Ariege/PLAN_D_EAU.shp")
