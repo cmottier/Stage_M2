@@ -13,6 +13,7 @@ library(tidyterra)
 library(lubridate)
 library(KrigR)
 library(rgbif)
+library(osmdata)
 
 # Occitanie et données de ragondins --------------------------------------------
 
@@ -26,6 +27,9 @@ occitanie <- dpts_occitanie %>% st_union()
 
 rm(dpts_occitanie)
 
+# buffer autour de l'Occitanie (10km)
+occitanie_buff <- st_buffer(occitanie, dist = 10000, endCapStyle = "ROUND")
+
 ## Ragondins 2019 #############
 
 # Import des données
@@ -37,6 +41,8 @@ nutria <- st_read("Data/Data_pts_test_infos.shp") %>%
 # changement de format
 occitanie <- occitanie %>%
   st_transform(crs = st_crs(nutria))
+occitanie_buff <- occitanie_buff %>%
+  st_transform(crs = st_crs(nutria))
 
 # intersection avec occitanie
 nutria <- st_intersection(nutria, occitanie)
@@ -44,6 +50,7 @@ nutria <- st_intersection(nutria, occitanie)
 # plot des données 
 p <- ggplot() +
   geom_sf(data = occitanie, fill = "white", color = "black", lwd = .5) + 
+  # geom_sf(data = occitanie_buff, fill = NA, color = "red", lwd = .5) + 
   geom_sf(data = nutria) + 
   labs(color = "") +
   theme_void()
@@ -306,15 +313,15 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# Cellules manquantes ! 
 # save(grid_sf, file = "grid_sf_5km2.RData")
 
 
 ## Densité de population ####################
+# à corriger pour bande manquante (frontière) !!!!
 
 pop <- st_read("Data/pop2021.gpkg")
 pop <- pop %>% 
-  st_transform(crs = st_crs(occitanie)) %>%
+  st_transform(crs = st_crs(grid_sf)) %>%
   st_intersection(occitanie)
 
 ggplot() +
@@ -351,12 +358,57 @@ ggplot() +
 
 
 ## Longueur de chemins ####################
+# open street map
+rast <- st_bbox(st_transform(occitanie_buff, crs = 4326))
+
+# labels à utiliser 
+# https://wiki.openstreetmap.org/wiki/Map_features#Highway
+# val1 <- c("primary",
+#         "secondary",
+#         "tertiary",
+#         "unclassified",
+#         "pedestrian",
+#         # "track",
+#         "footway",
+#         "path"
+#         # cycleway"
+#         )
+# val2 <- c("bicycle",
+#           "foot",
+#           "hiking",
+#           "road"
+#           )
+
+
+# Créer la requête OSM pour extraire les chemins de randonnée
+query <- opq(bbox = rast) %>%
+  add_osm_feature(key = "route", key_exact = TRUE, value = c("foot", "hiking"), value_exact = TRUE)
+
+# Exécuter la requête et récupérer les résultats
+data_osm <- osmdata_sf(query)
+
+# Extraire les chemins de randonnée sous forme de sf
+lines_osm <- data_osm$osm_lines
+points_osm <- data_osm$osm_points
+poly_osm <- data_osm$osm_polygons
+multilines_osm <- data_osm$osm_multilines
+
+ggplot() +
+  # geom_sf(data = lines_osm) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  # geom_sf(data = points_osm) 
+  # geom_sf(data = poly_osm) +
+  geom_sf(data=multilines_osm)
+
 
 # OpenStreetMap https://www.data.gouv.fr/fr/datasets/itineraires-de-randonnee-dans-openstreetmap/
 chemins_osm <- st_read("Data/hiking_foot_routes_lineLine.shp")
 chemins_osm <- chemins_osm %>% 
   st_transform(crs = st_crs(grid_sf)) %>%
   st_intersection(occitanie)
+
+ggplot() +
+  geom_sf(data = chemins_osm)
 
 # Avec la grille
 grid_chemin <- chemins_osm  %>%
@@ -456,6 +508,11 @@ river_lines <- Ariege %>%
 rm(list=c("Ariege", "Aude","Aveyron","Gard","Gers","HauteGaronne",
           "HautesPyrenees","Herault","Lot","Lozere","PyreneesOrientales","Tarn","TarnetGaronne"))
 
+ggplot() +
+  geom_sf(data = river_lines, lwd = 0.1) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  theme_void()
+
 # rivières d'Occitanie
 rivers_occ <- river_lines %>%
   st_transform(crs = st_crs(grid_sf)) %>%
@@ -484,7 +541,7 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "Data/grid_sf_5km2.RData")
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
 ## Distance aux rivières ####################
 
@@ -496,7 +553,7 @@ grid_sf$dist_rivieres <- st_distance(grid_sf, river_lines[index,], by_element = 
 
 # plot
 ggplot() +
-  geom_sf(data = grid_sf, color = NA, aes(fill = dist_rivieres)) +
+  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_rivieres))) +
   scale_fill_viridis_c(
   ) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
