@@ -314,7 +314,7 @@ ggplot() +
 
 pop <- st_read("Data/pop2021.gpkg")
 pop <- pop %>% 
-  st_transform(crs = st_crs(grid_sf)) %>%
+  st_transform(crs = st_crs(occitanie)) %>%
   st_intersection(occitanie)
 
 ggplot() +

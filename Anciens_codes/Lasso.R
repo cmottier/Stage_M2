@@ -2,7 +2,7 @@
 
 ## Code et data ####
 
-prior de beta et alpha à revoir ! double exponentielle !!!
+# prior de beta et alpha à revoir ! double exponentielle !!!
 
 code <- nimbleCode({
   # latent-state model
