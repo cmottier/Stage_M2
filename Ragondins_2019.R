@@ -381,8 +381,8 @@ rast <- st_bbox(st_transform(occitanie_buff, crs = 4326))
 
 
 # Créer la requête OSM pour extraire les chemins de randonnée
-query <- opq(bbox = rast) %>%
-  add_osm_feature(key = "route", key_exact = TRUE, value = c("foot", "hiking"), value_exact = TRUE)
+query <- opq(bbox = c(-0.45, 42.2, 3.38, 42.9)) %>%
+  add_osm_feature(key = "route", value = c("foot", "hiking"))
 
 # Exécuter la requête et récupérer les résultats
 data_osm <- osmdata_sf(query)
