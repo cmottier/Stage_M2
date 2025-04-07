@@ -27,8 +27,6 @@ occitanie <- dpts_occitanie %>% st_union()
 
 rm(dpts_occitanie)
 
-# buffer autour de l'Occitanie (10km)
-occitanie_buff <- st_buffer(occitanie, dist = 10000, endCapStyle = "ROUND")
 
 ## Ragondins 2019 #############
 
@@ -40,8 +38,6 @@ nutria <- st_read("Data/Data_pts_test_infos.shp") %>%
 
 # changement de format
 occitanie <- occitanie %>%
-  st_transform(crs = st_crs(nutria))
-occitanie_buff <- occitanie_buff %>%
   st_transform(crs = st_crs(nutria))
 
 # intersection avec occitanie
@@ -56,6 +52,30 @@ p <- ggplot() +
   theme_void()
 p
 # ggsave(plot = p, "fig/map.png", dpi = 600)
+
+
+## Buffers ###################
+
+# buffer autour de l'Occitanie (10km)
+occitanie_buff <- st_buffer(occitanie, dist = 10000, endCapStyle = "ROUND")
+
+# buffer côté espagnol (10km)
+fr <- st_read("Data/regions_2015_metropole_region.shp") %>% 
+  st_union() %>% 
+  st_transform(crs = st_crs(occitanie))
+
+espagne_buff <- st_difference(occitanie_buff, fr) 
+
+box <- st_bbox(c(xmin = -0.49, ymin = 42.19, xmax = 3.33, ymax = 42.87),
+               crs = 4326) %>%
+  st_transform(crs = st_crs(occitanie))
+
+espagne_buff <- st_crop(espagne_buff, box) # on recadre un peu
+
+ggplot() +
+  geom_sf(data = espagne_buff, fill = "grey") +
+  geom_sf(data = occitanie, fill = NA)
+
 
 ## Grille ###################
 
@@ -319,10 +339,9 @@ ggplot() +
 ## Densité de population ####################
 # à corriger pour bande manquante (frontière) !!!!
 
-pop <- st_read("Data/pop2021.gpkg")
+pop <- st_read("Data/Densite/popoccitanie.shp")
 pop <- pop %>% 
-  st_transform(crs = st_crs(grid_sf)) %>%
-  st_intersection(occitanie)
+  st_transform(crs = st_crs(grid_sf)) 
 
 ggplot() +
   geom_sf(data = pop, lwd = 0.1, color = NA, aes(fill = TOT_P_2021)) +
@@ -330,15 +349,15 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# la frontière n'est pas donnée !
-
 # Avec la grille
 grid_pop <- pop %>%
   st_intersection(grid_sf) %>%
   group_by(grid_id) %>%
   summarise(hab = sum(TOT_P_2021)) %>%
-  as_tibble() %>%
-  select(-geom)
+  as_tibble() 
+
+grip_pop <- grid_pop %>%
+  select(-geometry)
 
 # Log densité
 grid_sf <- grid_sf %>% 
@@ -346,7 +365,7 @@ grid_sf <- grid_sf %>%
   mutate(.before = 1, logdensity = log(hab/area)) %>%
   select(-hab)
 
-# problème des cellules -inf (vides) et NA (cellules manquantes sur la frontière)... 
+# problème des cellules -inf (vides)... 
 
 ggplot() +
   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(logdensity))) +
@@ -354,124 +373,160 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "Data/grid_sf_5km2.RData")
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
 
-## Longueur de chemins ####################
-# open street map
-rast <- st_bbox(st_transform(occitanie_buff, crs = 4326))
 
-# labels à utiliser 
+
+## Distances aux chemins ####################
+
+# Open Street Map
+# Pour les labels à utiliser, voir : 
 # https://wiki.openstreetmap.org/wiki/Map_features#Highway
-# val1 <- c("primary",
-#         "secondary",
-#         "tertiary",
-#         "unclassified",
-#         "pedestrian",
-#         # "track",
-#         "footway",
-#         "path"
-#         # cycleway"
-#         )
-# val2 <- c("bicycle",
-#           "foot",
-#           "hiking",
-#           "road"
-#           )
 
+# Côté français
+# https://www.data.gouv.fr/fr/datasets/itineraires-de-randonnee-dans-openstreetmap/
+chemins_osm <- st_read("Data/hiking_foot_routes_lineLine.shp")
+chemins_osm <- chemins_osm %>% 
+  st_transform(crs = st_crs(grid_sf)) %>%
+  st_intersection(occitanie_buff)
 
-# Créer la requête OSM pour extraire les chemins de randonnée
-query <- opq(bbox = c(-0.45, 42.2, 3.38, 42.9)) %>%
+ggplot() +
+  geom_sf(data = chemins_osm, color = "royalblue") +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5)
+
+# Côté espagnol
+# Créer la requête OSM pour extraire les chemins de randonnée (frontière uniquement !)
+query <- opq(bbox = st_transform(box, crs = 4326)) %>%
   add_osm_feature(key = "route", value = c("foot", "hiking"))
 
 # Exécuter la requête et récupérer les résultats
 data_osm <- osmdata_sf(query)
 
-# Extraire les chemins de randonnée sous forme de sf
+# Extraire les chemins de randonnée (les autres formats donnent la même chose)
 lines_osm <- data_osm$osm_lines
-points_osm <- data_osm$osm_points
-poly_osm <- data_osm$osm_polygons
-multilines_osm <- data_osm$osm_multilines
+# points_osm <- data_osm$osm_points
+# poly_osm <- data_osm$osm_polygons
+# multilines_osm <- data_osm$osm_multilines
 
-ggplot() +
-  # geom_sf(data = lines_osm) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  # geom_sf(data = points_osm) 
-  # geom_sf(data = poly_osm) +
-  geom_sf(data=multilines_osm)
-
-
-# OpenStreetMap https://www.data.gouv.fr/fr/datasets/itineraires-de-randonnee-dans-openstreetmap/
-chemins_osm <- st_read("Data/hiking_foot_routes_lineLine.shp")
-chemins_osm <- chemins_osm %>% 
+# On intersecte avec le buffer
+lines_osm <- lines_osm %>% 
   st_transform(crs = st_crs(grid_sf)) %>%
-  st_intersection(occitanie)
+  st_intersection(espagne_buff)
+
+# save(lines_osm, file = "RData/chemins_espagne.RData")
 
 ggplot() +
-  geom_sf(data = chemins_osm)
+  geom_sf(data = lines_osm, color = "royalblue") +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5)
 
-# Avec la grille
-grid_chemin <- chemins_osm  %>%
-  st_intersection(grid_sf) %>%
-  mutate(len = st_length(.)) %>%
-  group_by(grid_id) %>%
-  summarise(lgr = sum(len)) %>%
-  as_tibble() %>%
-  select(-geometry)
-
-# longueur/surface 
-grid_sf <- grid_sf %>% 
-  full_join(grid_chemin, by = "grid_id") %>%
-  mutate(.before = 1, lgr_chemins = lgr/area) %>%
-  select(-lgr)
-
+# On réunit espagne et france (doublons possibles)
+chemins <- rbind(
+  chemins_osm %>% select(osm_id, geometry), 
+  lines_osm %>% select(osm_id, geometry)
+)
 
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(lgr_chemins))) +
-  labs(fill = "Longueur de chemins (km/m^2)") +
-  scale_fill_viridis_c() +
+  geom_sf(data = chemins, color = "royalblue") +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5)
+
+# On cherche l'indice du chemin le plus proche
+index <- st_nearest_feature(grid_sf, chemins)
+
+# On garde la distance associée
+grid_sf$dist_chemins <- st_distance(grid_sf, chemins[index,], by_element = TRUE)
+
+# plot
+ggplot() +
+  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_chemins))) +
+  scale_fill_viridis_c(
+  ) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "Data/grid_sf_5km2.RData")
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
-## Longueur de routes ####################
 
-roads <- st_read("Data/TRONCON_ROUTE.shp")
+
+## Distances aux routes ####################
+
+# Côté français
+roads <- st_read("Data/TRONCON_ROUTE.shp") # routes de la France entière
 str(roads)
 unique(roads$CLASS_ADM)
 
+# Dans le buffer uniquement
 routes_occ <- roads %>%
   st_transform(crs = st_crs(grid_sf)) %>%
-  st_intersection(occitanie) %>%
+  st_intersection(occitanie_buff) %>%
   filter(CLASS_ADM != "Autoroute" & CLASS_ADM !="Sans objet") # D\xe9partementale ne marche pas...
 
-# Avec la grille
-grid_route <- routes_occ  %>%
-  st_intersection(grid_sf) %>%
-  mutate(len = st_length(.)) %>%
-  group_by(grid_id) %>%
-  summarise(lgr = sum(len)) %>%
-  as_tibble() %>%
-  select(-geometry)
+ggplot() +
+  geom_sf(data = routes_occ, color = "royalblue") +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) 
 
-# longueur/surface 
-grid_sf <- grid_sf %>% 
-  full_join(grid_route, by = "grid_id") %>%
-  mutate(.before = 1, lgr_routes = lgr/area) %>%
-  select(-lgr)
+# Côté espagnol
+# Créer la requête OSM pour extraire les routes (frontière uniquement !)
+query <- opq(bbox = st_transform(box, crs = 4326)) %>%
+  add_osm_feature(key = "route", value = c("road"))
+
+# Exécuter la requête et récupérer les résultats
+road_osm <- osmdata_sf(query)
+
+# Les routes du buffer (sauf autoroute et grands axes)
+roads_lines <- road_osm$osm_lines %>%
+  filter(highway %in% c("trunk", "primary", "secondary", "tertiary", "unclassified")) %>%
+  st_transform(crs = st_crs(grid_sf)) %>%
+  st_intersection(espagne_buff)
 
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(lgr_routes))) +
-  labs(fill = "Longueur de routes (km/m^2)") +
-  scale_fill_viridis_c() +
+  geom_sf(data = roads_lines, color = "royalblue") +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) # pas très convaincant
+
+# On réunit espagne et france (doublons possibles)
+routes <- rbind(
+  roads_lines %>% select(geometry), 
+  routes_occ %>% select(geometry)
+)
+
+ggplot() +
+  geom_sf(data = routes, color = "royalblue") +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5)
+
+# On cherche l'indice de la route la plus proche
+index <- st_nearest_feature(grid_sf, routes)
+
+# On garde la distance associée
+grid_sf$dist_routes <- st_distance(grid_sf, routes[index,], by_element = TRUE)
+
+# plot
+ggplot() +
+  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_routes))) +
+  scale_fill_viridis_c(
+  ) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "Data/grid_sf_5km2.RData")
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
-## Longueur de cours d'eau ####################
 
+## Routes et chemins ensemble #################
+
+grid_sf$dist_acces <- pmin(grid_sf$dist_chemins, grid_sf$dist_routes)
+
+# plot
+ggplot() +
+  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_acces))) +
+  scale_fill_viridis_c(
+  ) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  theme_void()
+
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
+
+## Distances aux cours d'eau ####################
+
+# Côté français
 # https://bdtopoexplorer.ign.fr/detail_hydrographique
 
 Ariege <- sf::st_read("Data/Rivieres/Ariege/COURS_D_EAU.shp")
@@ -501,59 +556,57 @@ river_lines <- Ariege %>%
   rbind(Lozere) %>%
   rbind(PyreneesOrientales) %>%
   rbind(Tarn) %>%
-  rbind(TarnetGaronne) %>%
-  sf::st_transform(crs = st_crs(occitanie)) %>%
-  sf::st_simplify()
+  rbind(TarnetGaronne) 
 
 rm(list=c("Ariege", "Aude","Aveyron","Gard","Gers","HauteGaronne",
           "HautesPyrenees","Herault","Lot","Lozere","PyreneesOrientales","Tarn","TarnetGaronne"))
+
+# on ajoute les départements du buffer
+for (i in 1:10) {
+  river_lines <- river_lines %>%
+    rbind(st_read(paste("Data/Rivieres/Buffer/Buffer", i,  "/COURS_D_EAU.shp", sep = "")))
+}
+
+# on garde Occitanie + buffer
+river_lines <- river_lines %>%
+  st_transform(crs = st_crs(occitanie)) %>%
+  st_intersection(occitanie_buff) %>%
+  st_simplify()
 
 ggplot() +
   geom_sf(data = river_lines, lwd = 0.1) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# rivières d'Occitanie
-rivers_occ <- river_lines %>%
+# Côté espagnol
+
+rivieres <- st_read("Data/Rivieres/Espagne/HydroRIVERS_v10_eu.shp")
+
+# On garde uniquement le buffer autour de la frontiere
+rivieres_espagne <- rivieres %>%
   st_transform(crs = st_crs(grid_sf)) %>%
-  st_intersection(occitanie)
+  st_crop(box) %>% # on garde que la box
+  st_intersection(espagne_buff) # Espagne uniquement
 
-# Avec la grille
-grid_rivieres <- rivers_occ  %>%
-  st_intersection(grid_sf) %>%
-  mutate(len = st_length(.)) %>%
-  group_by(grid_id) %>%
-  summarise(lgr = sum(len)) %>%
-  as_tibble() %>%
-  select(-geometry)
-
-# longueur/surface 
-grid_sf <- grid_sf %>% 
-  full_join(grid_rivieres, by = "grid_id") %>%
-  mutate(.before = 1, lgr_rivieres = lgr/area) %>%
-  select(-lgr)
-
-# visualisation
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(lgr_rivieres))) +
-  labs(fill = "Longueur de cours d'eau par unité d'aire (km/m^2)") +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+  geom_sf(data = rivieres_espagne, color = "royalblue") +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5)
 
-# save(grid_sf, file = "RData/grid_sf_5km2.RData")
-
-## Distance aux rivières ####################
+# On réunit espagne et france (doublons possibles)
+rivieres <- rbind(
+  river_lines %>% select(geometry), 
+  rivieres_espagne %>% select(geometry)
+)
 
 # On cherche l'indice de la rivière la plus proche
-index <- st_nearest_feature(grid_sf, river_lines)
+index <- st_nearest_feature(grid_sf, rivieres)
 
 # On garde la distance associée
-grid_sf$dist_rivieres <- st_distance(grid_sf, river_lines[index,], by_element = TRUE)
+grid_sf$dist_rivieres <- st_distance(grid_sf, rivieres[index,], by_element = TRUE)
 
-# plot
+# plot (très peu de cellule >0 !)
 ggplot() +
-  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_rivieres))) +
+  geom_sf(data = grid_sf[as.numeric(grid_sf$dist_rivieres)!=0,], color = NA, aes(fill = as.numeric(dist_rivieres))) +
   scale_fill_viridis_c(
   ) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
@@ -561,7 +614,11 @@ ggplot() +
 
 # save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
-## Proportion de plan d'eau ####################
+
+
+## Distance aux plans d'eau ####################
+
+# Côté fançais
 
 # https://bdtopoexplorer.ign.fr/detail_hydrographique
 
@@ -593,64 +650,74 @@ plan_eau <- Ariege %>%
   rbind(Lozere) %>%
   rbind(PyreneesOrientales) %>%
   rbind(Tarn) %>%
-  rbind(TarnetGaronne) %>%
-  sf::st_transform(crs = st_crs(occitanie)) %>%
-  sf::st_simplify()
+  rbind(TarnetGaronne) 
 
 rm(list=c("Ariege", "Aude","Aveyron","Gard","Gers","HauteGaronne",
           "HautesPyrenees","Herault","Lot","Lozere","PyreneesOrientales","Tarn","TarnetGaronne"))
 
-# à voir s'il faut faire un tri
-unique(plan_eau$NATURE)
+# on ajoute les départements du buffer
+for (i in 1:10) {
+  plan_eau <- plan_eau %>%
+    rbind(st_read(paste("Data/Rivieres/Buffer/Buffer", i,  "/PLAN_D_EAU.shp", sep = "")))
+}
 
-# plans d'eau d'Occitanie
-plan_eau_occ <- plan_eau %>%
+# on garde le buffer
+plan_eau <- plan_eau %>%
+  st_transform(crs = st_crs(occitanie)) %>%
+  st_intersection(occitanie_buff) %>%
+  st_simplify()
+
+# Côté espagnol
+
+plan_eau_esp <- st_read("Data/Rivieres/Espagne/HydroLAKES_polys_v10.shp")
+
+# On garde uniquement le buffer autour de la frontiere
+plan_eau_esp <- plan_eau_esp %>%
   st_transform(crs = st_crs(grid_sf)) %>%
-  st_intersection(occitanie)
-
-# Avec la grille
-grid_plan <-  plan_eau_occ  %>%
-  st_intersection(grid_sf) 
-
-grid_plan_union <- grid_plan %>% 
-  group_by(grid_id) %>% 
-  summarise(geometry = st_union(geometry)) %>% # pour enlever les chevauchements étranges...
-  mutate(area_eau_tot = st_area(.)) %>%
-  as_tibble() %>%
-  select(-geometry)
-
-grid_sf <- grid_sf %>% 
-  full_join(grid_plan_union, by = "grid_id") %>%
-  mutate(.before = 1, surface_en_eau = area_eau_tot/area) %>%
-  select(-area_eau_tot)
+  st_crop(box) %>% # on garde que la box
+  st_intersection(espagne_buff) # Espagne uniquement
 
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(surface_en_eau))) +
-  scale_fill_viridis_c(
-    labels = scales::percent_format()
-  ) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+  geom_sf(data = plan_eau_esp, color = "royalblue") +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5)
 
-# save(grid_sf, file = "grid_sf_5km2.RData")
-
-## Distance aux plans d'eau ####################
+# On réunit espagne et france (doublons possibles)
+plan_eau_tot <- rbind(
+  plan_eau %>% select(geometry), 
+  plan_eau_esp %>% select(geometry)
+)
 
 # On cherche l'indice du plan d'eau le plus proche
-index <- st_nearest_feature(grid_sf, plan_eau)
+index <- st_nearest_feature(grid_sf, plan_eau_tot)
 
 # On garde la distance associée
-grid_sf$dist_plan_eau <- st_distance(grid_sf, plan_eau[index,], by_element = TRUE)
+grid_sf$dist_plan_eau <- st_distance(grid_sf, plan_eau_tot[index,], by_element = TRUE)
 
 # plot
 ggplot() +
-  geom_sf(data = grid_sf, color = NA, aes(fill = dist_plan_eau)) +
+  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_plan_eau))) +
   scale_fill_viridis_c(
   ) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
 # save(grid_sf, file = "RData/grid_sf_5km2.RData")
+
+## Rivières et plans d'eau ensemble ######################
+
+grid_sf$dist_eau <- pmin(grid_sf$dist_rivieres, grid_sf$dist_plan_eau)
+
+# plot
+ggplot() +
+  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_eau))) +
+  scale_fill_viridis_c(
+  ) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  theme_void()
+
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
+
+
 
 ## Observations toutes espèces (GBIF) ####################
 

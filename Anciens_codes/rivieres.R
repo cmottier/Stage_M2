@@ -1,4 +1,7 @@
-# Rivières 
+## Longueur de cours d'eau ####################
+
+# https://bdtopoexplorer.ign.fr/detail_hydrographique
+
 Ariege <- sf::st_read("Data/Rivieres/Ariege/COURS_D_EAU.shp")
 Aude <- sf::st_read("Data/Rivieres/Aude/COURS_D_EAU.shp")
 Aveyron <- sf::st_read("Data/Rivieres/Aveyron/COURS_D_EAU.shp")
@@ -13,7 +16,7 @@ PyreneesOrientales <- sf::st_read("Data/Rivieres/PO/COURS_D_EAU.shp")
 Tarn <- sf::st_read("Data/Rivieres/Tarn/COURS_D_EAU.shp")
 TarnetGaronne <- sf::st_read("Data/Rivieres/TarnEtGaronne/COURS_D_EAU.shp")
 
-# bind river
+# on regroupe
 river_lines <- Ariege %>%
   rbind(Aude) %>%
   rbind(Aveyron) %>%
@@ -33,34 +36,40 @@ river_lines <- Ariege %>%
 rm(list=c("Ariege", "Aude","Aveyron","Gard","Gers","HauteGaronne",
           "HautesPyrenees","Herault","Lot","Lozere","PyreneesOrientales","Tarn","TarnetGaronne"))
 
+ggplot() +
+  geom_sf(data = river_lines, lwd = 0.1) +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  theme_void()
+
 # rivières d'Occitanie
 rivers_occ <- river_lines %>%
   st_transform(crs = st_crs(grid_sf)) %>%
-  st_intersection(grid_sf)
+  st_intersection(occitanie)
 
-# longueur de chaque segment
-rivers_occ$length <- st_length(rivers_occ)
+# Avec la grille
+grid_rivieres <- rivers_occ  %>%
+  st_intersection(grid_sf) %>%
+  mutate(len = st_length(.)) %>%
+  group_by(grid_id) %>%
+  summarise(lgr = sum(len)) %>%
+  as_tibble() %>%
+  select(-geometry)
 
-# somme des segments par cellule
-longueur_par_cellule <- rivers_occ %>%
-  group_by(grid_id) %>%  
-  summarise(lgr_totale = sum(length))  # Somme des longueurs
-
-# jointure
-grid_sf$lgr_rivieres <- 0
-for (i in 1:nrow(grid_sf)){
-  mask <- grid_sf$grid_id[i]
-  if (sum(longueur_par_cellule$grid_id == mask) == 0) next
-  grid_sf$lgr_rivieres[i] <- longueur_par_cellule$lgr_totale[longueur_par_cellule$grid_id == mask]
-}
+# longueur/surface 
+grid_sf <- grid_sf %>% 
+  full_join(grid_rivieres, by = "grid_id") %>%
+  mutate(.before = 1, lgr_rivieres = lgr/area) %>%
+  select(-lgr)
 
 # visualisation
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = lgr_rivieres/1000)) +
-  labs(fill = "Longueur de cours d'eau (km)") +
+  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(lgr_rivieres))) +
+  labs(fill = "Longueur de cours d'eau par unité d'aire (km/m^2)") +
   scale_fill_viridis_c() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
+
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
 # Essai des distances à la rivière la plus proche
 
@@ -116,14 +125,6 @@ rm(list=c("Ariege", "Aude","Aveyron","Gard","Gers","HauteGaronne",
 # à voir s'il faut faire un tri
 unique(plan_eau$NATURE)
 
-# format
-plan_eau <- plan_eau %>%
-  st_transform(crs = st_crs(grid_sf))
-
-# plans d'eau d'Occitanie
-plan_eau_occ <- plan_eau %>%
-  st_transform(crs = st_crs(grid_sf)) %>%
-  st_intersection(occitanie)
 
 # Avec la grille
 grid_plan <-  plan_eau_occ  %>%
@@ -149,45 +150,20 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# distance aux plans d'eau
+# save(grid_sf, file = "grid_sf_5km2.RData")
 
-dist_eau <- st_distance(grid_sf, st_transform(plan_eau, crs = st_crs(grid_sf)))
-# save(dist_eau, file = "Data/dist_eau.RData")
+##################
+# Espagne
 
-# On regarde la distance minimale
-dist_eau_min <- apply(dist_eau, 1, min)
 
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = dist_eau_min)) +
-  scale_fill_viridis_c(
-  ) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+rivieres <- st_read("Data/Rivieres/Espagne/HydroRIVERS_v10_eu.shp")
 
-# Pour essayer d'être plus efficace...
-dist = 15000 # rayon de recherche autour de la cellule
-f_buff <- function (i) {
-  cell = grid_sf[i,]
-  buffer <- st_buffer(cell, dist) 
-  plan_filtre <- plan_eau[st_intersects(plan_eau, buffer, sparse = F),]
-  return(min(st_distance(cell, plan_filtre)))
-}
-
-for (i in 1:nrow(grid_sf)) {
-  grid_sf$dist_plan_eau[i] <- f_buff(i)
-}
-# apply ne marche pas...
+# On garde uniquement le buffer autour de la frontiere
+rivieres_espagne <- rivieres %>%
+  st_transform(crs = st_crs(grid_sf)) %>%
+  st_crop(box) %>% # on garde que la box
+  st_intersection(espagne_buff) # Espagne uniquement
 
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(dist_plan_eau))) +
-  scale_fill_viridis_c(
-  ) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
-
-ggplot() +
-  geom_sf(data = grid_sf[14,]) +
-  geom_sf(data = st_buffer(grid_sf[14,], dist), fill = NA) +
-  geom_sf(data=plan_eau_occ[st_intersects(plan_eau_occ, st_buffer(grid_sf[14,], dist), sparse = F),])
-
-min(st_distance(grid_sf[14,], plan_eau_occ[st_intersects(plan_eau_occ, st_buffer(grid_sf[14,], dist), sparse = F),]))
+  geom_sf(data = rivieres_espagne, color = "royalblue") +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5)
