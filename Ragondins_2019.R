@@ -14,6 +14,7 @@ library(lubridate)
 library(KrigR)
 library(rgbif)
 library(osmdata)
+library(corrplot)
 
 # Occitanie et données de ragondins --------------------------------------------
 
@@ -122,6 +123,7 @@ grid_sf$area <- st_area(st_intersection(grid_sf, occitanie))
 grid_sf$nnutria <- lengths(st_intersects(grid_sf, nutria))
 
 table(grid_sf$nnutria)
+# cellule n°13188 avec 249 observations
 
 # Cellules ayant au moins une observation
 nutria_count <- filter(grid_sf, nnutria > 0)
@@ -740,7 +742,7 @@ get_gbif_data <- function(taxon_key, month) {
     year = 2019,
     month = month, 
     hasCoordinate = TRUE,  # Seulement les données géolocalisées
-    limit = 500,  # Maximum d'enregistrements récupérés (à adapter)
+    limit = 1000,  # Maximum d'enregistrements récupérés (à adapter)
     geometry = paste(bbox_wkt, collapse = ",")  # Zone Occitanie
   )$data
 }
@@ -782,14 +784,6 @@ gbif_sf <- st_as_sf(gbif_clean, coords = c("decimalLongitude", "decimalLatitude"
 gbif_sf <- gbif_sf %>%
   st_transform(crs = st_crs(occitanie))
 
-# Afficher sur une carte
-ggplot() +
-  geom_sf(data = occitanie, fill="white", color = "black", lwd = .5) + 
-  geom_sf(data = gbif_sf, aes(color = class), alpha = 0.6) +
-  theme_minimal() +
-  labs(title = "Observations GBIF en Occitanie (2019)", color = "Classe") +
-  theme_void()
-
 # En occitanie
 gbif_occ <-  gbif_sf %>% st_intersection(occitanie)
 
@@ -804,6 +798,22 @@ ggplot() +
 # Nombre d'observations par cellule
 nobs_gbif <- lengths(st_intersects(grid_sf, gbif_occ))
 
+table(nobs_gbif)
+hist(nobs_gbif)
+
+# sur une carte
+ggplot() +
+  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(nobs_gbif))) +
+  scale_fill_viridis_c() +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  theme_void()
+
+
+
+# avec une troncature à 50 (voir Twinings)
+# Troncature
+nobs_gbif[nobs_gbif>=100] <- 100
+
 # sur une carte
 ggplot() +
   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(nobs_gbif))) +
@@ -813,27 +823,44 @@ ggplot() +
 
 hist(nobs_gbif)
 
-# avec une troncature à 50 (voir Twinings)
-# Troncature
-nobs_gbif[nobs_gbif>=50] <- 50
-
-# sur une carte
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(nobs_gbif))) +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
-
 # Ajout de la covariable (variable par unité d'aire)
 grid_sf$GBIF <- nobs_gbif/grid_sf$area 
+grid_sf$logGBIF <- log(as.numeric(grid_sf$GBIF) + 10^(-12)) # valeur artificielle à déterminer...
 
 # sur une carte
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(GBIF))) +
+  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(logGBIF))) +
   scale_fill_viridis_c() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
 # save(grid_sf, file = "grid_sf_5km2.RData")
 
+# Corrélations -----------------------------------------------------------------
+
+# il faut se débarasser des NA avant (grid_selec) ...
+variables <- grid_selec %>%
+  select(
+    c(
+      logdensity,
+      agri_cover,
+      temp_min,
+      temp_max,
+      temp_mean,
+      prec_cum,
+      GBIF,
+      logGBIF,
+      dist_eau,
+      dist_acces
+    )
+  ) %>%
+  units::drop_units() %>%
+  as.data.frame() %>%
+  select(- grid)
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+
+corrplot(cor(variables), method="color", col=col(200), 
+         type="upper",
+         addCoef.col = "black")
 
