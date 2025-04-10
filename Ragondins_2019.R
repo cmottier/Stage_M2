@@ -223,12 +223,6 @@ temp_min <- terra::extract(toccitanie_min, grid_sf # exact = T, # pour toutes le
   group_by(ID) %>%
   summarise(tmin2019 = mean(lyr.17, na.rm = T))
 
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = temp_min$tmin2019)) +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
-
 temp_max <- terra::extract(toccitanie_max, grid_sf, # exact = T, # pour toutes les cellules... 
     ) %>%
   group_by(ID) %>%
@@ -243,6 +237,12 @@ temp_mean <- terra::extract(toccitanie_mean, grid_sf,  # exact = T, # pour toute
 grid_sf$temp_min <- temp_min$tmin2019
 grid_sf$temp_max <- temp_max$tmax2019
 grid_sf$temp_mean <- temp_mean$tmean2019
+
+ggplot() +
+  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = temp_mean)) +
+  scale_fill_viridis_c() +
+  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+  theme_void()
 
 # save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
@@ -286,14 +286,14 @@ prec_cum <- terra::extract(poccitanie_cum, grid_sf) %>%
   summarise(pcum2019 = mean(lyr.17, na.rm = T)
   )
 
+# Ajout de la covariable à grid_sf
+grid_sf$prec_cum <- prec_cum$pcum2019
+
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = prec_cum$pcum2019)) +
+  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = prec_cum)) +
   scale_fill_viridis_c() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
-
-# Ajout de la covariable à grid_sf
-grid_sf$prec_cum <- prec_cum$pcum2019
 
 # save(grid_sf, file = "RData/grid_sf_5km2.RData")
 

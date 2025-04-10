@@ -141,6 +141,8 @@ code <- nimbleCode({
   }
   # Derived parameter, the number of cells occupied
   # zsum <- sum(z[1:npixel])
+  # probabilité de présence
+  prob[1:npixel] <- 1-exp(-lambda[1:npixel])
 })
 
 
@@ -163,7 +165,7 @@ inits <- function(){
 }
 
 # Paramètres à suivre
-params <- c("alpha", "beta")
+params <- c("alpha", "beta") #, "lambda", "b", "prob") # très long si on suit tout !
 
 
 
@@ -255,8 +257,8 @@ params <- c("alpha", "beta")
 
 # MCMC settings
 nc <- 2
-nburn <- 10000 
-ni <- nburn + 30000 
+nburn <- 8000 
+ni <- nburn + 10000 
 nt <- 1
 
 # On lance
@@ -282,8 +284,8 @@ end - start
 # save(out, file = "out_prox_5km2_ens_mult.RData")
 
 # Vérifications
-MCMCsummary(out)
-MCMCtrace(out, pdf = FALSE, ind = TRUE, params = "all")
+MCMCsummary(out, param=c("alpha", "beta"))
+MCMCtrace(out, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
 MCMCplot(out, params = "beta")
 
 # Résultats
@@ -291,60 +293,99 @@ res <- rbind(out$chain1, out$chain2)
 
 ## Retour à l'Occitanie ###########
 
-# select alpha
-mask <- str_detect(colnames(res), "alpha")
-res_alpha <- res[,mask]
-alphaestim <- apply(res_alpha, 2, median)
-alphamoy <- apply(res_alpha, 2, mean)
+# paramètre à tracer : "lambda", "prob", "^b[^e]"
+param = "lambda"
 
-# select beta
-mask <- str_detect(colnames(res), "beta")
-res_beta <- res[,mask]
-betaestim <- apply(res_beta, 2, median)
-betamoy <- apply(res_beta, 2, mean)
-
-# lambda et b
-grid_selec$lambda <- exp(betaestim[1] +
-                           betaestim[2] * data$x_1 +
-                           betaestim[3] * data$x_2 +
-                           betaestim[4] * data$x_3 +
-                           betaestim[5] * data$x_4 +
-                           betaestim[6] * data$x_5 +
-                           betaestim[7] * data$x_6 +
-                           betaestim[8] * data$x_7 +
-                           + data$cell_area)
-grid_selec$b <- plogis(alphaestim[1] +
-                         alphaestim[2] * data$h_1)
-
-grid_selec <- grid_selec %>% st_transform(st_crs(occitanie))
+# estimateurs
+mask <- str_detect(colnames(res), param)
+res_param <- res[,mask]
+paramestim <- apply(res_param, 2, median)
+parammoy <- apply(res_param, 2, mean)
 
 # plot
-p_lambda <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = lambda)) +
-  labs(fill = "Intensité") +
+p <- ggplot() +
+  geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = parammoy)) +
+  labs(fill = "Intensité") + # à modifier
   scale_fill_viridis_c(begin = 0, end = 1) +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   # geom_sf(data = nutria) +
   theme_light()
-p_lambda
-# ggsave(plot = p_lambda, "Images/map_int_env_5km2_dist.png", dpi = 600)
+p
+# ggsave(plot = p, "Images/map_int_env_5km2_dist.png", dpi = 600)
 
-p_b <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = b)) +
-  labs(fill = "Effort") +
-  scale_fill_viridis_c(begin = 0, end = 1) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  # geom_sf(data = nutria) +
-  theme_light()
-p_b
-# ggsave(plot = p_b, "Images/map_eff_env_5km2_dist.png", dpi = 600)
 
-p_p <- ggplot() +
-  geom_sf(data = st_intersection(grid_selec, occitanie), color= NA, aes(fill = 1-exp(-lambda))) +
-  labs(fill = "Présence potentielle estimée du ragondin") +
-  scale_fill_viridis_c(begin = 0, end = 1) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  # geom_sf(data = nutria) +
-  theme_light()
-p_p
-# ggsave(plot = p_p, "Images/map_pres_env_5km2_dist.png", dpi = 600)
+# # select alpha
+# mask <- str_detect(colnames(res), "alpha")
+# res_alpha <- res[,mask]
+# alphaestim <- apply(res_alpha, 2, median)
+# alphamoy <- apply(res_alpha, 2, mean)
+# 
+# # select beta
+# mask <- str_detect(colnames(res), "beta")
+# res_beta <- res[,mask]
+# betaestim <- apply(res_beta, 2, median)
+# betamoy <- apply(res_beta, 2, mean)
+# 
+# # select lambda
+# mask <- str_detect(colnames(res), "lambda")
+# res_lambda <- res[,mask]
+# lambdaestim <- apply(res_lambda, 2, median)
+# lambdamoy <- apply(res_lambda, 2, mean)
+# 
+# # select b
+# mask <- str_detect(colnames(res), "^b[^e]") # pour ne pas sélectionner beta et lambda...
+# res_b <- res[,mask]
+# bestim <- apply(res_b, 2, median)
+# bmoy <- apply(res_b, 2, mean)
+# 
+# # select prob
+# mask <- str_detect(colnames(res), "prob")
+# res_prob <- res[,mask]
+# probestim <- apply(res_prob, 2, median)
+# probmoy <- apply(res_prob, 2, mean)
+# 
+# # # lambda et b
+# # grid_selec$lambda <- exp(betaestim[1] +
+# #                            betaestim[2] * data$x_1 +
+# #                            betaestim[3] * data$x_2 +
+# #                            betaestim[4] * data$x_3 +
+# #                            betaestim[5] * data$x_4 +
+# #                            betaestim[6] * data$x_5 +
+# #                            betaestim[7] * data$x_6 +
+# #                            betaestim[8] * data$x_7 +
+# #                            + data$cell_area)
+# # grid_selec$b <- plogis(alphaestim[1] +
+# #                          alphaestim[2] * data$h_1)
+# # 
+# # grid_selec <- grid_selec %>% st_transform(st_crs(occitanie))
+# 
+# # plot
+# p_lambda <- ggplot() +
+#   geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = lambdamoy)) +
+#   labs(fill = "Intensité") +
+#   scale_fill_viridis_c(begin = 0, end = 1) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   # geom_sf(data = nutria) +
+#   theme_light()
+# p_lambda
+# # ggsave(plot = p_lambda, "Images/map_int_env_5km2_dist.png", dpi = 600)
+# 
+# p_b <- ggplot() +
+#   geom_sf(data = st_intersection(grid_selec, occitanie), color = NA, aes(fill = bmoy)) +
+#   labs(fill = "Effort") +
+#   scale_fill_viridis_c(begin = 0, end = 1) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   # geom_sf(data = nutria) +
+#   theme_light()
+# p_b
+# # ggsave(plot = p_b, "Images/map_eff_env_5km2_dist.png", dpi = 600)
+# 
+# p_p <- ggplot() +
+#   geom_sf(data = st_intersection(grid_selec, occitanie), color= NA, aes(fill = probmoy)) +
+#   labs(fill = "Présence potentielle estimée du ragondin") +
+#   scale_fill_viridis_c(begin = 0, end = 1) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   # geom_sf(data = nutria) +
+#   theme_light()
+# p_p
+# # ggsave(plot = p_p, "Images/map_pres_env_5km2_dist.png", dpi = 600)

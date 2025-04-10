@@ -2,8 +2,6 @@
 
 ## Code et data ####
 
-# prior de beta et alpha à revoir ! double exponentielle !!!
-
 code <- nimbleCode({
 
   for(pixel in 1:npixel){
@@ -34,17 +32,17 @@ code <- nimbleCode({
       / CONSTANT
       ) 
   }
-
-  beta[1] ~ dnorm(0, sd = 2) # intercept
-  for(i in 2:8){
-    beta[i] ~ ddexp(0, lambda) 
-  }
-  lambda ~ dunif(0.001,10)
-
+  
   for(j in 1:2){
     alpha[j] ~ dnorm(0, sd = 2)
   }
-  
+
+  beta[1] ~ dnorm(0, sd = 2) # intercept
+  for(i in 2:8){
+    beta[i] ~ ddexp(0, tau) 
+  }
+  tau ~ dunif(0.001,10)
+
 })
 
 
@@ -64,11 +62,11 @@ out <- nimbleMCMC(
   constants = constants,
   data = data,
   inits = inits(),
-  monitors = c("alpha", "beta", "lambda"),
+  monitors = c("alpha", "beta", "tau"),
   niter = ni,
   nburnin = nburn,
   nchains = nc,
-  thin = nt,
+  thin = nt
   # WAIC = TRUE
 )
 end <- Sys.time()

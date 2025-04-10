@@ -86,7 +86,7 @@ model <- nimbleCode({
     logit(p[i]) <- beta[1] + beta[2] * X[i,1] + beta[3] * X[i,2] + beta[4] * X[i,3]
     y[i] ~ dbern(p[i])
   }
-  beta[1] ~ dnorm(0,0.1) # jags uses precision = 1 / var
+  beta[1] ~ dnorm(0, sd = 10) 
   # L1 regularization == a Laplace (double exponential) prior 
   for (j in 2:4) {
     beta[j] ~ ddexp(0, lambda)  
