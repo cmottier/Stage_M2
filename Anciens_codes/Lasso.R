@@ -5,126 +5,49 @@
 # prior de beta et alpha à revoir ! double exponentielle !!!
 
 code <- nimbleCode({
-  # latent-state model
+
   for(pixel in 1:npixel){
-    # latent state linear predictor
-    #
-    # x_s  = covariates for latent state
-    # beta = latent state model regression coefficients
-    # cell_area = log area of grid cell
-    #
     
     log(lambda[pixel]) <- beta[1] +
-      betagamma[1] * x_1[pixel] +
-      betagamma[2] * x_2[pixel] +
-      betagamma[3] * x_3[pixel] + 
-      betagamma[4] * x_4[pixel] + 
-      betagamma[5] * x_5[pixel] + 
-      betagamma[6] * x_6[pixel] +
-      betagamma[7] * x_7[pixel] +
-      betagamma[8] * x_8[pixel] + 
+      beta[2] * x_1[pixel] +
+      beta[3] * x_2[pixel] +
+      beta[4] * x_3[pixel] + 
+      beta[5] * x_4[pixel] + 
+      beta[6] * x_5[pixel] + 
+      beta[7] * x_6[pixel] +
+      beta[8] * x_7[pixel] +
       cell_area[pixel] 
 
-    # presence only thinning prob linear predictor
-    #
-    # h_s = covariates for thinning probability
-    # alpha  = presence-only data model regression coefficients
-    #
-    logit(b[pixel]) <-  alpha[1] + alphagamma[1] * h_1[pixel] + alphagamma[2] * h_2[pixel]
-  }
-  # The presence only data model.
-  #
-  # This part of the model just uses the
-  #  what we have calculated above (lambda
-  #  and b). The denominator of this likelihood
-  #  is actually a scalar so we can calculate it
-  #  outside of a for loop. Let's do that first.
-  #
-  # The presence_only data model denominator, which
-  #  is the thinned poisson process across the
-  #  whole region (divided by the total number of
-  #  data points because it has to be
-  #  evaluated for each data point).
-  # m is the number of presence-only data points
+    logit(b[pixel]) <-  alpha[1] + 
+      alpha[2] * h_1[pixel] 
+  
+    }
+  
   po_denominator <- inprod(lambda[1:npixel], b[1:npixel]) / m
-  #
-  # Loop through each presence-only data point
-  #  using Bernoulli one's trick. The numerator
-  #  is just the thinned poisson process for
-  #  the ith data point.
-  #  po_pixel denotes the grid cell of the ith presence only data point
+
   for(po in 1:m){
     ones[po] ~ dbern(
       exp(
         log(lambda[po_pixel[po]] * b[po_pixel[po]]) -
-          po_denominator)
-      / CONSTANT) # attention, voir issue https://github.com/mfidino/integrated-occupancy-model/issues/1
+          po_denominator
+        )
+      / CONSTANT
+      ) 
   }
-  # Priors for latent state model
-  for(i in 1:9){
-    beta[i] ~ dnorm(0, sd = 2)
+
+  beta[1] ~ dnorm(0, sd = 2) # intercept
+  for(i in 2:8){
+    beta[i] ~ ddexp(0, lambda) 
   }
-  # Priors for presence-only data model
-  for(j in 1:3){
+  lambda ~ dunif(0.001,10)
+
+  for(j in 1:2){
     alpha[j] ~ dnorm(0, sd = 2)
   }
   
-  for(i in 1:8){
-    betagamma[i] <- beta[i+1] * gamma[i]
-    gamma[i] ~ dbern(0.5)
-  }
-  for(j in 1:2){
-    alphagamma[j] <- alpha[j+1] * gam[j]
-    gam[j] ~ dbern(0.5)
-  }
 })
 
-head(grid_selec$grid_id) # les ID des cellules
 
-pixel.id.det <- grid_selec$grid_id[grid_selec$nnutria > 0] # les ID des cellules où il y a au moins une occurrence
-head(pixel.id.det)
-
-npix <- nrow(grid_selec)
-# avec prise en compte de la surface intersectée
-s.area <- as.numeric(units::set_units(grid_selec$area,"km^2"))
-logarea <- log(s.area)
-
-# data : choisir entre distance à l'eau ou surface...
-data <- list(
-  cell_area = logarea,
-  # x_1 = scale(grid_selec$surface_en_eau)[,1],
-  x_1 = scale(grid_selec$dist_plan_eau)[,1],
-  x_2 = scale(grid_selec$logdensity)[,1],
-  x_3 = scale(grid_selec$agri_cover)[,1],
-  x_4 = scale(grid_selec$temp_min)[,1],
-  x_5 = scale(grid_selec$temp_max)[,1],
-  x_6 = scale(grid_selec$temp_mean)[,1],
-  x_7 = scale(grid_selec$prec_cum)[,1],
-  # x_8 = scale(grid_selec$lgr_rivieres)[,1],
-  x_8 = scale(grid_selec$dist_rivieres)[,1],
-  h_1 = scale(grid_selec$lgr_chemins)[,1],
-  h_2 = scale(grid_selec$lgr_routes)[,1],
-  ones = rep(1, length(pixel.id.det)))
-
-constants <- list(
-  npixel = npix,
-  m = length(pixel.id.det), 
-  CONSTANT = 50000,
-  po_pixel = pixel.id.det) 
-
-# zinit <- numeric(npix)
-# zinit[pixel.id.det] <- 1
-inits <- function(){
-  list(
-    beta = rnorm(9, 0, 1), 
-    # gamma = rep(1, 8),
-    alpha = rnorm(3, 0, 1)
-    # gam = rep(1, 2)
-    # z = zinit # pourquoi en commentaire dans le code initial ?
-  )
-}
-
-params <- c("alpha", "beta", "alphagamma", "betagamma")
 
 ## MCMC ####
 
@@ -134,36 +57,14 @@ nburn <- 5000 #5000
 ni <- nburn + 10000 #30000
 nt <- 1
 
-# set.seed(123) 
-# iv <- inits()
-# 
-# # param b
-# b <- plogis(iv$alpha[1] + iv$alpha[2] * data$h_1 + iv$alpha[3] * data$h_2) # pas de valeurs qui explosent
-# summary(b)
-# 
-# # param lambda
-# lambda <- exp(iv$beta[1] +
-#                 iv$beta[2] * data$x_1 +
-#                 iv$beta[3] * data$x_2 +
-#                 iv$beta[4] * data$x_3 +
-#                 iv$beta[5] * data$x_4 +
-#                 iv$beta[6] * data$x_5 +
-#                 iv$beta[7] * data$x_6 +
-#                 iv$beta[8] * data$x_7 +
-#                 iv$beta[9] * data$x_8 + data$cell_area) 
-# summary(lambda)
-# which.max(lambda)
-# data$x_1[which.max(lambda)]
-# summary(data$x_7)
-
 set.seed(123)
 start <- Sys.time()
-out_env <- nimbleMCMC(
+out <- nimbleMCMC(
   code = code,
   constants = constants,
   data = data,
   inits = inits(),
-  monitors = params,
+  monitors = c("alpha", "beta", "lambda"),
   niter = ni,
   nburnin = nburn,
   nchains = nc,
@@ -173,14 +74,13 @@ out_env <- nimbleMCMC(
 end <- Sys.time()
 end - start
 
-# save(out_env, file = "out_env_5km2_dist.RData")
 
-MCMCsummary(out_env)
+MCMCsummary(out)
 
-MCMCtrace(out_env, pdf = FALSE, ind = TRUE, params = "alpha")
-MCMCplot(out_env, params = "beta")
+MCMCtrace(out, pdf = FALSE, ind = TRUE, params = "all")
+MCMCplot(out, params = "beta")
 
-res <- rbind(out_env$chain1, out_env$chain2)
+res <- rbind(out$chain1, out$chain2)
 
 # # select z
 # mask <- str_detect(colnames(res), "z")

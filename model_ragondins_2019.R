@@ -52,10 +52,10 @@ data <- list(
   x_1 = scale(grid_selec$dist_eau)[,1],
   x_2 = scale(grid_selec$logdensity)[,1],
   x_3 = scale(grid_selec$agri_cover)[,1],
-  x_4 = scale(grid_selec$temp_min)[,1],
-  x_5 = scale(grid_selec$temp_max)[,1],
-  x_6 = scale(grid_selec$temp_mean)[,1],
-  x_7 = scale(grid_selec$prec_cum)[,1]
+  x_4 = scale(grid_selec$prec_cum)[,1],
+  x_5 = scale(grid_selec$temp_min)[,1],
+  x_6 = scale(grid_selec$temp_max)[,1],
+  x_7 = scale(grid_selec$temp_mean)[,1]
   )
 
 
@@ -90,7 +90,7 @@ code <- nimbleCode({
       beta[3] * x_2[pixel] +
       beta[4] * x_3[pixel] + 
       beta[5] * x_4[pixel] + 
-      beta[6] * x_5[pixel] + 
+      beta[6] * x_5[pixel] +
       beta[7] * x_6[pixel] +
       beta[8] * x_7[pixel] +
       cell_area[pixel] # prise en compte de la surface intersectée
@@ -278,7 +278,8 @@ end <- Sys.time()
 end - start
 
 # On sauve
-# save(out, file = "out_prox_5km2_ens.RData")
+# out_prox_mult <- out
+# save(out, file = "out_prox_5km2_ens_mult.RData")
 
 # Vérifications
 MCMCsummary(out)
@@ -311,9 +312,11 @@ grid_selec$lambda <- exp(betaestim[1] +
                            betaestim[6] * data$x_5 +
                            betaestim[7] * data$x_6 +
                            betaestim[8] * data$x_7 +
-                           data$cell_area)
+                           + data$cell_area)
 grid_selec$b <- plogis(alphaestim[1] +
                          alphaestim[2] * data$h_1)
+
+grid_selec <- grid_selec %>% st_transform(st_crs(occitanie))
 
 # plot
 p_lambda <- ggplot() +

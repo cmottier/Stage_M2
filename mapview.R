@@ -8,3 +8,4 @@ mapview(nutria, cex = 0.5) + mapview(grid_selec, burst = TRUE, hide = TRUE, alph
 
 # cellules particulières nb obs ragondins ou GBIF
 mapview(grid_sf[grid_sf$grid_id %in% c(9533,9401,13188),])
+mapview(grid_sf[grid_sf$grid_id %in% c(13188),])

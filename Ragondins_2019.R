@@ -244,7 +244,7 @@ grid_sf$temp_min <- temp_min$tmin2019
 grid_sf$temp_max <- temp_max$tmax2019
 grid_sf$temp_mean <- temp_mean$tmean2019
 
-# save(grid_sf, file = "grid_sf_5km2.RData")
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
 ## Précipitations ####################
 
@@ -295,7 +295,7 @@ ggplot() +
 # Ajout de la covariable à grid_sf
 grid_sf$prec_cum <- prec_cum$pcum2019
 
-# save(grid_sf, file = "grid_sf_5km2.RData")
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
 ## Surface agricole ####################
 
@@ -335,7 +335,7 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "grid_sf_5km2.RData")
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
 
 ## Densité de population ####################
@@ -834,7 +834,7 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "grid_sf_5km2.RData")
+# save(grid_sf, file = "RData/grid_sf_5km2.RData")
 
 # Corrélations -----------------------------------------------------------------
 
@@ -851,7 +851,7 @@ variables <- grid_selec %>%
       GBIF,
       logGBIF,
       dist_eau,
-      dist_acces
+      dist_acces,
     )
   ) %>%
   units::drop_units() %>%
