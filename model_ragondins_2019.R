@@ -6,8 +6,9 @@ library(ggplot2)
 library(sf)
 # library(stringr)
 library(tidyverse)
-
-
+#
+# /!\ Choisir l'effort et le modèle (1 détection ou plusieurs) avant lancement des MCMC
+#
 
 # Chargement et travail préalable sur grid -----------------------------------------------
 
@@ -357,7 +358,7 @@ p
 # # grid_selec$b <- plogis(alphaestim[1] +
 # #                          alphaestim[2] * data$h_1)
 # # 
-# # grid_selec <- grid_selec %>% st_transform(st_crs(occitanie))
+# grid_selec <- grid_selec %>% st_transform(st_crs(occitanie))
 # 
 # # plot
 # p_lambda <- ggplot() +
