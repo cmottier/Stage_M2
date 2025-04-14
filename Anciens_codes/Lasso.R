@@ -45,13 +45,28 @@ code <- nimbleCode({
 
 })
 
+data$ones =  rep(1, length(pixel.id.det))
+
+constants <- list(
+  npixel = npix,
+  m = length(pixel.id.det), 
+  CONSTANT = 50000,
+  po_pixel = pixel.id.det) 
+
+# Initialisation
+inits <- function(){
+  list(
+    beta = rnorm(8, 0, 1), 
+    alpha = rnorm(2, 0, 1)
+  )
+}
 
 
 ## MCMC ####
 
 # MCMC settings (pour tester...)
 nc <- 2
-nburn <- 5000 #5000
+nburn <- 10000 #5000
 ni <- nburn + 10000 #30000
 nt <- 1
 
@@ -80,29 +95,7 @@ MCMCplot(out, params = "beta")
 
 res <- rbind(out$chain1, out$chain2)
 
-# # select z
-# mask <- str_detect(colnames(res), "z")
-# res_z <- res[,mask]
-# grid_selec$zestim <- apply(res_z, 2, median)
-# grid_selec$zmoy <- apply(res_z, 2, mean)
 
-# # viz
-# ggplot() +
-#   geom_sf(data = grid_selec, lwd = 0.1, aes(fill = as_factor(zestim))) +
-#   labs(fill = "Présence potentielle estimée du ragondin") +
-#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-#   # geom_sf(data = nutria) +
-#   theme_void()
-# 
-# p <- ggplot() +
-#   geom_sf(data = st_intersection(grid_selec, occitanie), lwd = 0.1, aes(fill = zmoy)) +
-#   labs(fill = "Présence potentielle estimée du ragondin") +
-#   scale_fill_viridis_c(begin = 0, end = 1) +
-#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-#   # geom_sf(data = nutria) +
-#   theme_light()
-# p
-# # ggsave(plot = p, "Images/map_env.png", dpi = 600)
 
 # select alpha
 mask <- str_detect(colnames(res), "alpha")
@@ -158,7 +151,7 @@ p_p <- ggplot() +
   # geom_sf(data = nutria) +
   theme_light()
 p_p
-# ggsave(plot = p_p, "Images/map_pres_env_5km2_dist.png", dpi = 600)
+s# ggsave(plot = p_p, "Images/map_pres_env_5km2_dist.png", dpi = 600)
 
 
 
