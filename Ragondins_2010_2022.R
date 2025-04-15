@@ -31,7 +31,7 @@ rm(dpts_occitanie)
 
 ## Ragondins #############
 
-periode = (2010:2022)
+periode = (2010:2024)
 
 # Import des données
 nutria_periode <- st_read("Data/Data_pts_test_infos.shp") %>%
@@ -52,7 +52,7 @@ nutria_periode <- st_intersection(nutria_periode, occitanie)
 p <- ggplot() +
   geom_sf(data = occitanie, fill = "white", color = "black", lwd = .5) + 
   # geom_sf(data = occitanie_buff, fill = NA, color = "red", lwd = .5) + 
-  geom_sf(data = nutria_periode) + 
+  geom_sf(data = nutria_periode, color = "chartreuse4", cex = 0.5) + 
   facet_wrap(~ year, nrow = 4) +
   labs(color = "") +
   theme_void()
@@ -118,21 +118,22 @@ grid_sf <- grid_sf %>%
 grid_sf$area <- st_area(st_intersection(grid_sf, occitanie))
 
 
-## Ragondins par cellules #########
-
-nnutria_names <- paste0(rep("nnutria", length(periode)), periode)
+## Ragondins par cellule et par an ####################
 
 # Nombre d'observations de ragondins par cellules
 for (annee in periode) {
   nutria_annee <- nutria_periode %>%
     filter(year == annee)
   grid_sf[,paste0("nnutria", annee)] <- lengths(st_intersects(grid_sf, nutria_annee))
-  }
+}
+
+# Résumé
+nnutria_names <- paste0(rep("nnutria", length(periode)), periode)
 
 for (name in nnutria_names) {
   print(name)
   print(table(grid_sf[[name]]))
-        }
+  }
 
 for (name in nnutria_names) {
   print(name)
@@ -184,8 +185,8 @@ toccitanie <- CDownloadS(
   Variable = "2m_temperature",
   DataSet = "reanalysis-era5-land-monthly-means",
   Type = "monthly_averaged_reanalysis",
-  DateStart = "2003-01-01 00:00",
-  DateStop = "2025-12-31 23:00",
+  DateStart = "2010-01-01 00:00",
+  DateStop = "2024-12-31 23:00",
   TZone = "Europe/Paris",
   TResolution = "month",
   TStep = 1,
@@ -198,7 +199,7 @@ toccitanie <- CDownloadS(
 
 toccitanie <- weathermetrics::kelvin.to.celsius(toccitanie)
 
-# variables annuelles de 2003 (1) à 2024 (22)
+# variables annuelles de 2010 (1) à 2024 (22)
 # mois min
 toccitanie_min <- terra::aggregate(toccitanie, fact=c(1,1,12), fun=min)
 # mois max 
@@ -213,48 +214,53 @@ toccitanie_min <- terra::focal(toccitanie_min, w=weight_matrix, fun = mean, na.p
 toccitanie_max <- terra::focal(toccitanie_max, w=weight_matrix, fun = mean, na.policy = "only", na.rm = T)
 toccitanie_mean <- terra::focal(toccitanie_mean, w=weight_matrix, fun = mean, na.policy = "only", na.rm = T)
 
-# plot de 2019 (17)
+# plot 
 ggplot() +
-  geom_spatraster(data=toccitanie_min$lyr.17) +
+  geom_spatraster(data=toccitanie_min) +
+  facet_wrap(~ lyr, nrow = 4) +
   scale_fill_viridis_c() +
   geom_sf(data = loc_site, 
           fill = NA)
 
 ggplot() +
-  geom_spatraster(data=toccitanie_max$lyr.17) +
+  geom_spatraster(data=toccitanie_max) +
+  facet_wrap(~ lyr, nrow = 4) +
   scale_fill_viridis_c() +
   geom_sf(data = loc_site, 
           fill = NA)
 
 ggplot() +
-  geom_spatraster(data=toccitanie_mean$lyr.17) +
+  geom_spatraster(data=toccitanie_mean) +
+  facet_wrap(~ lyr, nrow = 4) +
   scale_fill_viridis_c() +
   geom_sf(data = loc_site, 
           fill = NA)
 
-# avec la grille (2019 uniquement)
-temp_min <- terra::extract(toccitanie_min, grid_sf # exact = T, # pour toutes les cellules...
-    ) %>%
+# avec la grille 
+temp_min <- terra::extract(toccitanie_min, grid_sf) %>%
   group_by(ID) %>%
-  summarise(tmin2019 = mean(lyr.17, na.rm = T))
+  summarise(across(starts_with("lyr"), mean)) %>%
+  select(-ID) %>%
+  setNames(paste0("tmin_", periode))
 
-temp_max <- terra::extract(toccitanie_max, grid_sf, # exact = T, # pour toutes les cellules... 
-    ) %>%
+temp_max <- terra::extract(toccitanie_max, grid_sf) %>%
   group_by(ID) %>%
-  summarise(tmax2019 = mean(lyr.17, na.rm = T))
+  summarise(across(starts_with("lyr"), mean)) %>%
+  select(-ID) %>%
+  setNames(paste0("tmax_", periode))
 
-temp_mean <- terra::extract(toccitanie_mean, grid_sf,  # exact = T, # pour toutes les cellules... 
-    ) %>%
+temp_mean <- terra::extract(toccitanie_mean, grid_sf) %>%
   group_by(ID) %>%
-  summarise(tmean2019 = mean(lyr.17, na.rm = T))
+  summarise(across(starts_with("lyr"), mean)) %>%
+  select(-ID) %>%
+  setNames(paste0("tmean_", periode))
 
 # ajout des covariables dans grif_sf
-grid_sf$temp_min <- temp_min$tmin2019
-grid_sf$temp_max <- temp_max$tmax2019
-grid_sf$temp_mean <- temp_mean$tmean2019
+grid_sf <- cbind(grid_sf, temp_min, temp_max, temp_mean)
+
 
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = temp_mean)) +
+  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = tmin_2019)) +
   scale_fill_viridis_c() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
@@ -268,7 +274,7 @@ poccitanie <- CDownloadS(
   DataSet = "reanalysis-era5-land-monthly-means",
   CumulVar = TRUE,
   Type = "monthly_averaged_reanalysis",
-  DateStart = "2003-01-01 00:00",
+  DateStart = "2010-01-01 00:00",
   DateStop = "2024-12-31 23:00",
   TZone = "Europe/Paris",
   TResolution = "month",
@@ -288,24 +294,27 @@ poccitanie_cum <- terra::aggregate(poccitanie, fact=c(1,1,12), fun=sum)
 # Moyenne pour les cellules manquantes
 poccitanie_cum <- terra::focal(poccitanie_cum, w=weight_matrix, fun = mean, na.policy = "only", na.rm = T)
 
-# plot de 2019 (17)
+# plot 
 ggplot() +
-  geom_spatraster(data=poccitanie_cum$lyr.17) +
+  geom_spatraster(data=poccitanie_cum) +
+  facet_wrap(~ lyr, nrow = 4) +
   scale_fill_viridis_c() +
   geom_sf(data = loc_site, 
           fill = NA)
 
-# avec la grille (2019 uniquement)
+# avec la grille 
 prec_cum <- terra::extract(poccitanie_cum, grid_sf) %>%
   group_by(ID) %>%
-  summarise(pcum2019 = mean(lyr.17, na.rm = T)
-  )
+  summarise(across(starts_with("lyr"), mean)) %>%
+  select(-ID) %>%
+  setNames(paste0("pcum_", periode))
 
-# Ajout de la covariable à grid_sf
-grid_sf$prec_cum <- prec_cum$pcum2019
+# ajout des covariables dans grif_sf
+grid_sf <- cbind(grid_sf, prec_cum)
+
 
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = prec_cum)) +
+  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = pcum_2019)) +
   scale_fill_viridis_c() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
@@ -350,7 +359,7 @@ ggplot() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-# save(grid_sf, file = "RData/grid_sf_5km2.RData")
+# save(grid_sf, file = "RData/grid_sf_5km2_periode.RData")
 
 
 ## Densité de population ####################
