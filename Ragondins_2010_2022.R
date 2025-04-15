@@ -4,8 +4,6 @@
 
 # librairies utiles ------------------------------------------------------------
 
-library(nimble)
-library(MCMCvis)
 library(ggplot2)
 library(tidyverse)
 library(sf)
@@ -15,6 +13,7 @@ library(KrigR)
 library(rgbif)
 library(osmdata)
 library(corrplot)
+
 
 # Occitanie et données de ragondins --------------------------------------------
 
@@ -760,38 +759,40 @@ print(c(oiseaux_key, mammiferes_key, amphibiens_key, reptiles_key))
 bbox_wkt <- "POLYGON((-0.4 42, 5 42, 5 45.1, -0.4 45.1, -0.4 42))"
 
 # Fonction pour récupérer les données d'un taxon donné
-get_gbif_data <- function(taxon_key, month) {
+get_gbif_data <- function(taxon_key, month, year) {
   occ_search(
     classKey = taxon_key, 
-    year = 2019,
+    year = year,
     month = month, 
     hasCoordinate = TRUE,  # Seulement les données géolocalisées
-    limit = 1000,  # Maximum d'enregistrements récupérés (à adapter)
+    limit = 500,  # Maximum d'enregistrements récupérés (à adapter)
     geometry = paste(bbox_wkt, collapse = ",")  # Zone Occitanie
   )$data
 }
 
-# on télécharge 500 données mensuelles pour chaque taxon
+# on télécharge 500 données mensuelles pour chaque taxon et chaque année
 # on fait varier les mois pour éviter la saisonnalité... 
 
-month = 1
-data_oiseaux <- get_gbif_data(oiseaux_key, month)
-data_mammiferes <- get_gbif_data(mammiferes_key, month)
-data_amphibiens <- get_gbif_data(amphibiens_key, month)
-data_reptiles <- get_gbif_data(reptiles_key, month)
-gbif_data <- bind_rows(data_oiseaux, data_mammiferes, data_amphibiens, data_reptiles)
+gbif_data <- NULL
 
-for (month in 2:12) {
-  data_oiseaux <- get_gbif_data(oiseaux_key, month)
-  data_mammiferes <- get_gbif_data(mammiferes_key, month)
-  data_amphibiens <- get_gbif_data(amphibiens_key, month)
-  data_reptiles <- get_gbif_data(reptiles_key, month)
-  gbif_data <- bind_rows(gbif_data, data_oiseaux, data_mammiferes, data_amphibiens, data_reptiles)
+for (annee in periode) {
+  print(annee)
+  for (mois in 1:12) {
+    data_oiseaux <- get_gbif_data(oiseaux_key, mois, annee)
+    data_mammiferes <- get_gbif_data(mammiferes_key, mois, annee)
+    data_amphibiens <- get_gbif_data(amphibiens_key, mois, annee)
+    # data_reptiles <- get_gbif_data(reptiles_key, mois, annee) # pas de reptiles sur la periode
+    gbif_data <- bind_rows(gbif_data,
+                           data_oiseaux,
+                           data_mammiferes,
+                           data_amphibiens)
+                           # data_reptiles
+  }
 }
-# Pas de réptiles...
-# save(gbif_data, file = "gbif_data.RData")
 
-table(gbif_data$month)
+# save(gbif_data, file = "RData/gbif_data_periode.RData")
+
+table(gbif_data$year)
 
 dim(gbif_data)  # Nombre de lignes et colonnes
 glimpse(gbif_data)  # Aperçu des colonnes disponibles
@@ -816,75 +817,41 @@ ggplot() +
   geom_sf(data = occitanie, fill = "white", color = "black", lwd = .5) + 
   geom_sf(data = gbif_occ, aes(color = class), alpha = 0.6) +
   theme_minimal() +
-  labs(title = "Observations GBIF en Occitanie (2019)", color = "Classe") +
+  facet_wrap(~year, nrow = 4) +
+  labs(color = "Classe") +
   theme_void()
 
-# Nombre d'observations par cellule
-nobs_gbif <- lengths(st_intersects(grid_sf, gbif_occ))
+# Nombre d'observations par cellule et par an
+nobs_gbif <- NULL
+for (annee in periode) {
+  obs <- gbif_occ %>%
+    filter(year == annee)
+  nobs_gbif[[paste0("gbif_",annee)]] <- lengths(st_intersects(grid_sf, obs))
+}
+nobs_gbif <- as_tibble(nobs_gbif)
 
-table(nobs_gbif)
-hist(nobs_gbif)
+table(nobs_gbif$gbif_2010)
 
-# sur une carte
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(nobs_gbif))) +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
-
-
-
-# avec une troncature à 50 (voir Twinings)
+# avec une troncature à 100 (voir Twinings)
 # Troncature
 nobs_gbif[nobs_gbif>=100] <- 100
 
+# Ajout des covariables dans grid_sf (variables par unité d'aire)
+grid_sf <- cbind(grid_sf,nobs_gbif) %>%
+  mutate(across(starts_with("gbif"), ~.x/area, .names = "d{.col}")) %>%
+  select(-starts_with("gbif"))
+
+grid_sf <- grid_sf %>%
+  mutate(across(starts_with("dgbif"), ~log(as.numeric(.x) + 10^(-12)), .names = "log_{.col}"))  
+# 10^(-12) valeur artificielle à déterminer...
+
+
 # sur une carte
 ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(nobs_gbif))) +
+  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(log_dgbif_2019))) +
   scale_fill_viridis_c() +
   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
   theme_void()
 
-hist(nobs_gbif)
-
-# Ajout de la covariable (variable par unité d'aire)
-grid_sf$GBIF <- nobs_gbif/grid_sf$area 
-grid_sf$logGBIF <- log(as.numeric(grid_sf$GBIF) + 10^(-12)) # valeur artificielle à déterminer...
-
-# sur une carte
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(logGBIF))) +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
-
-# save(grid_sf, file = "RData/grid_sf_5km2.RData")
-
-# Corrélations -----------------------------------------------------------------
-
-# il faut se débarasser des NA avant (grid_selec) ...
-variables <- grid_selec %>%
-  select(
-    c(
-      logdensity,
-      agri_cover,
-      temp_min,
-      temp_max,
-      temp_mean,
-      prec_cum,
-      GBIF,
-      logGBIF,
-      dist_eau,
-      dist_acces,
-    )
-  ) %>%
-  units::drop_units() %>%
-  as.data.frame() %>%
-  select(- grid)
-
-col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
-
-corrplot(cor(variables), method="color", col=col(200), 
-         type="upper",
-         addCoef.col = "black")
+# save(grid_sf, file = "RData/grid_sf_5km2_periode.RData")
 
