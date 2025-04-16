@@ -43,7 +43,7 @@ p <- ggplot() +
   geom_sf(data = occitanie, fill = "white", color = "black", lwd = .5) + 
   # geom_sf(data = data_CEN_lin, color = "blue") +
   geom_sf(data = data_CEN_poly, color = "red") +
-  # geom_sf(data = data_CEN_pts, color = "chartreuse4") +
+  geom_sf(data = data_CEN_pts, color = "chartreuse4") +
   labs(color = "") +
   theme_void()
 p

@@ -5,23 +5,14 @@ library(MCMCvis)
 library(ggplot2)
 library(sf)
 library(tidyverse)
-#
-# /!\ Choisir l'effort et le modèle (1 détection ou plusieurs) avant lancement des MCMC
-#
-# /!\ Choisir l'année d'étude
-
-
-# Choix de l'année -------------------------------------------------------------
-
-annee = 2010
 
 
 # Chargement et travail préalable sur grid -------------------------------------
 
 # Chargement de la grille complète
-load("RData/grid_sf_5km2_periode.RData")
+# load("RData/grid_sf_5km2_periode.RData")
 
-# on enlève les cellules sans intersection avec Occitanie 
+# on enlève si nécessaire les cellules sans intersection avec Occitanie 
 grid_selec <- grid_sf %>%
   filter(as.numeric(area)!=0)
 
@@ -38,56 +29,13 @@ grid_selec$logdensity[is.infinite(grid_selec$logdensity)] <- -50 # valeur artifi
 grid_selec$agri_cover[is.na(grid_selec$agri_cover)] <- 0
 
 
+# Codes Nimble -----------------------------------------------------------------
 
-
-# Paramètres communs aux deux modèles ----------------------------------------
-
-# Nombre de pixels
-npix <- nrow(grid_selec)
-
-# Aire des pixels
-s.area <- as.numeric(units::set_units(grid_selec$area,"km^2"))
-logarea <- log(s.area)
-
-# ID des cellules où il y a au moins une occurrence
-pixel.id.det <- grid_selec$grid_id[grid_selec[[paste0("nnutria", annee)]] > 0]
-
-# Variables environnementales
-data <- list(cell_area = logarea,
-  x_1 = scale(grid_selec$dist_eau)[,1],
-  x_2 = scale(grid_selec$logdensity)[,1],
-  x_3 = scale(grid_selec$agri_cover)[,1],
-  x_4 = scale(grid_selec[[paste0("pcum_", annee)]])[,1],
-  x_5 = scale(grid_selec[[paste0("tmin_", annee)]])[,1],
-  x_6 = scale(grid_selec[[paste0("tmax_", annee)]])[,1],
-  x_7 = scale(grid_selec[[paste0("tmean_", annee)]])[,1]
-  )
-
-
-# Choix de l'effort ------------------------------------------------------------
-
-# /!\ choix de l'effort
-data$h_1 <- scale(grid_selec$dist_acces)[,1] # proxy
-# data$h_1 <- scale(grid_selec[[paste0("dgbif_", annee)]])[,1] 
-# data$h_1 <- scale(grid_selec[[paste0("log_dgbif_", annee)]])[,1]
-
-
-
-# Modèle à une détection par cellule -------------------------------------------
-
-## Code ###############
-
-# Bayesian version of the Koshkina (2017) model.
-code <- nimbleCode({
-  # latent-state model
+# Une détection par cellule
+code_uni <- nimbleCode({
+  # pour toutes les cellules
   for(pixel in 1:npixel){
-    # latent state linear predictor
-    #
-    # x_s  = covariates for latent state
-    # beta = latent state model regression coefficients
-    # cell_area = log area of grid cell
-    #
-    
+    # intensité
     log(lambda[pixel]) <- beta[1] +
       beta[2] * x_1[pixel] +
       beta[3] * x_2[pixel] +
@@ -96,89 +44,38 @@ code <- nimbleCode({
       beta[6] * x_5[pixel] +
       beta[7] * x_6[pixel] +
       beta[8] * x_7[pixel] +
-      cell_area[pixel] # prise en compte de la surface intersectée
-    # Species presence in a gridcell as a Bernoulli trial
-    # z[pixel] ~ dbern(1 - exp(-lambda[pixel]))
-    # presence only thinning prob linear predictor
-    #
-    # h_s = covariates for thinning probability
-    # alpha  = presence-only data model regression coefficients
-    #
+      cell_area[pixel] 
+    # effort
     logit(b[pixel]) <-  alpha[1] + alpha[2] * h_1[pixel]
   }
-  # The presence only data model.
-  #
-  # This part of the model just uses the
-  #  what we have calculated above (lambda
-  #  and b). The denominator of this likelihood
-  #  is actually a scalar so we can calculate it
-  #  outside of a for loop. Let's do that first.
-  #
-  # The presence_only data model denominator, which
-  #  is the thinned poisson process across the
-  #  whole region (divided by the total number of
-  #  data points because it has to be
-  #  evaluated for each data point).
-  # m is the number of presence-only data points
+  
+  # pour les m cellules contenant une détection
   po_denominator <- inprod(lambda[1:npixel], b[1:npixel]) / m
-  #
-  # Loop through each presence-only data point
-  #  using Bernoulli one's trick. The numerator
-  #  is just the thinned poisson process for
-  #  the ith data point.
-  #  po_pixel denotes the grid cell of the ith presence only data point
+  
   for(po in 1:m){
     ones[po] ~ dbern(
       exp(
         log(lambda[po_pixel[po]] * b[po_pixel[po]]) -
           po_denominator)
-      / CONSTANT) # attention, voir issue https://github.com/mfidino/integrated-occupancy-model/issues/1
+      / CONSTANT) 
   }
-  # Priors for latent state model
+  
+  # Priors 
   for(i in 1:8){
     beta[i] ~ dnorm(0, sd = 2)
   }
-  # Priors for presence-only data model
+
   for(j in 1:2){
     alpha[j] ~ dnorm(0, sd = 2)
   }
-  # Derived parameter, the number of cells occupied
-  # zsum <- sum(z[1:npixel])
-  # probabilité de présence
-  prob[1:npixel] <- 1-exp(-lambda[1:npixel])
 })
 
 
-## data et constantes particulières ##########
-
-data$ones =  rep(1, length(pixel.id.det))
-
-constants <- list(
-  npixel = npix,
-  m = length(pixel.id.det), 
-  CONSTANT = 50000,
-  po_pixel = pixel.id.det) 
-
-# Initialisation
-inits <- function(){
-  list(
-    beta = rnorm(8, 0, 1), 
-    alpha = rnorm(2, 0, 1)
-  )
-}
-
-# Paramètres à suivre
-params <- c("alpha", "beta") #, "lambda", "b", "prob") # très long si on suit tout !
-
-
-
-# Modèle à multiples détections par cellule ------------------------------------
-
-## Code ############
-
-# Bayesian version of the Koshkina (2017) model.
-code <- nimbleCode({
+# Multiples détections par cellule
+code_multi <- nimbleCode({
+  # pour toutes les cellules
   for(pixel in 1:npixel){
+    # intensité
     log(lambda[pixel]) <- beta[1] +
       beta[2] * x_1[pixel] +
       beta[3] * x_2[pixel] +
@@ -188,99 +85,140 @@ code <- nimbleCode({
       beta[7] * x_6[pixel] +
       beta[8] * x_7[pixel] +
       cell_area[pixel]
-
+    # effort
     logit(b[pixel]) <-  alpha[1] + alpha[2] * h_1[pixel]
   }
   
+  # pour les nobs observations
   obs_denominator <- inprod(lambda[1:npixel], b[1:npixel]) / nobs
   
-  # on fait ici une boucle sur toutes les observations 
   for(obs in 1:nobs){
     ones[obs] ~ dbern(
       exp(
-        log(lambda[po_pixel[obs]] * b[po_pixel[obs]]) -
+        log(lambda[obs_pixel[obs]] * b[obs_pixel[obs]]) -
           obs_denominator)   
       / CONSTANT) 
   }
   
-  # Priors for latent state model
+  # Priors 
   for(i in 1:8){
     beta[i] ~ dnorm(0, sd = 2)
   }
-  # Priors for presence-only data model
+
   for(j in 1:2){
     alpha[j] ~ dnorm(0, sd = 2)
   }
-  # Derived parameter, the number of cells occupied
-  # zsum <- sum(z[1:npixel])
 })
 
 
 
-## Data et constantes particulières ########
+# Estimation -------------------------------------------------------------------
 
-# nombre d'observations
-# troncature pour éviter cellule particulière
-grid_selec$nnutria[grid_selec$nnutria > 50] <- 50 # valeur arbitraire à définir
+#' Estimation des paramètres (IPP)
+#'
+#' @param grid # grille à utiliser
+#' @param modele # une détection (1) ou multiples détections (2)
+#' @param effort # proximité aux routes ('prox') ou GBIF ('gbif')
+#' @param annee 
+#'
+estim_param <- function(grid, modele, effort, annee) {
+  
+  # Nombre de pixels
+  npix <- nrow(grid)
+  
+  # Aire des pixels
+  s.area <- as.numeric(units::set_units(grid$area,"km^2"))
+  logarea <- log(s.area)
+  
+  # ID des cellules où il y a au moins une occurrence
+  pixel.id.det <- grid$grid_id[grid[[paste0("nnutria", annee)]] > 0]
+  
+  # Troncature des observations
+  nb_observations <- grid[[paste0("nnutria", annee)]] 
+  nb_observations[nb_observations > 50] <- 50 # valeur arbitraire à définir
+  
+  # nombre total d'observations prises en compte
+  nobs = sum(nb_observations)
+  
+  # pixel associé aux observations (avec répétition)
+  obs_pixel <- NULL
+  for (i in 1:length(pixel.id.det)){
+    obs_pixel <- c(obs_pixel, rep(pixel.id.det[i], nb_observations[pixel.id.det[i]]))
+  }
+  
+  # Variables 
+  data <- list(cell_area = logarea,
+               x_1 = scale(grid_selec$dist_eau)[,1],
+               x_2 = scale(grid_selec$logdensity)[,1],
+               x_3 = scale(grid_selec$agri_cover)[,1],
+               x_4 = scale(grid_selec[[paste0("pcum_", annee)]])[,1],
+               x_5 = scale(grid_selec[[paste0("tmin_", annee)]])[,1],
+               x_6 = scale(grid_selec[[paste0("tmax_", annee)]])[,1],
+               x_7 = scale(grid_selec[[paste0("tmean_", annee)]])[,1])
+  
+  if (effort == 'prox') {
+    data$h_1 <- scale(grid_selec$dist_acces)[, 1]
+  }
+  else {
+    data$h_1 <- scale(grid_selec[[paste0("dgbif_", annee)]])[, 1]
+  }
+  
+  if (modele == 1) { data$ones <- rep(1, length(pixel.id.det)) }
+  else {
+    data$ones <- rep(1, nobs)
+  }
 
-# nombre total d'observations prises en compte
-nobs = sum(grid_selec$nnutria)
-
-# pixel associé aux observations (avec répétition)
-obs_pixel <- NULL
-for (i in 1:length(pixel.id.det)){
-  obs_pixel <- c(obs_pixel, rep(pixel.id.det[i], grid_selec$nnutria[pixel.id.det[i]]))
-}
-
-constants <- list(
-  npixel = npix,
-  nobs = nobs,
-  CONSTANT = 50000, 
-  po_pixel = obs_pixel) 
-
-# data
-data$ones <- rep(1, nobs)
-
-# initialisation
-inits <- function(){
-  list(
-    beta = rnorm(8, 0, 1),
-    alpha = rnorm(2, 0, 1)
+  
+  constants <- list(
+    npixel = npix,
+    nobs = nobs,
+    m = length(pixel.id.det), 
+    CONSTANT = 50000,
+    po_pixel = pixel.id.det,
+    obs_pixel = obs_pixel
+    ) 
+  
+  # Initialisation
+  inits <- function(){
+    list(
+      beta = rnorm(8, 0, 1), 
+      alpha = rnorm(2, 0, 1)
+    )
+  }
+  
+  # Paramètres à suivre
+  params <- c("alpha", "beta") 
+  
+  # MCMC settings
+  nc <- 2
+  nburn <- 8000 
+  ni <- nburn + 10000 
+  nt <- 1
+  
+  # MCMC
+  if (modele == 1) {code <- code_uni} else {code <- code_multi}
+  
+  out <- nimbleMCMC(
+    code = code,
+    constants = constants,
+    data = data,
+    inits = inits(),
+    monitors = params,
+    niter = ni,
+    nburnin = nburn,
+    nchains = nc,
+    thin = nt,
+    # WAIC = TRUE
   )
+  
+  # sortie
+  return(out)
 }
 
-# à suivre
-params <- c("alpha", "beta")
-
-
-
-# MCMC -------------------------------------------------------------------------
-
-## Exécution du modèle #################
-
-# MCMC settings
-nc <- 2
-nburn <- 8000 
-ni <- nburn + 10000 
-nt <- 1
-
-# On lance
 set.seed(123)
-start <- Sys.time()
-out <- nimbleMCMC(
-  code = code,
-  constants = constants,
-  data = data,
-  inits = inits(),
-  monitors = params,
-  niter = ni,
-  nburnin = nburn,
-  nchains = nc,
-  thin = nt,
-  # WAIC = TRUE
-)
-end <- Sys.time()
-end - start
+out_2010 <- estim_param(grid = grid_selec, modele = 1, effort = "prox", annee = 2010)
+MCMCsummary(out_2010, param=c("alpha", "beta"))
+
 
 # On sauve
 # out_prox_mult <- out
