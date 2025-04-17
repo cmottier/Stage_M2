@@ -7,8 +7,7 @@
 library(ggplot2)
 library(tidyverse)
 library(sf)
-library(tidyterra)
-library(corrplot)
+# library(tidyterra)
 library(terra)
 
 
@@ -27,7 +26,7 @@ poccitanie_cum <- rast("Data/A_charger/poccitanie_cum.tif")
 ## Construction de la grille ###########
 
 # Choix de la surface des cellules
-grid_area <- units::set_units(50000000,"m^2") #50km2
+grid_area <- units::set_units(5000000,"m^2") #5km2
 grid <- st_make_grid(occitanie, cellsize = grid_area, what = "polygons", square = FALSE)
 
 # sf
@@ -35,10 +34,10 @@ grid_sf <- st_sf(grid)
 
 rm(grid, grid_area)
 
-ggplot() +
-  geom_sf(data = grid_sf, lwd= 0.1) + 
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) + 
-  theme_void()
+# ggplot() +
+#   geom_sf(data = grid_sf, lwd= 0.1) + 
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) + 
+#   theme_void()
 
 # Cellules d'Occitanie uniquement
 grid_sf <- grid_sf[st_intersects(grid_sf, 
@@ -46,10 +45,10 @@ grid_sf <- grid_sf[st_intersects(grid_sf,
                                  sparse = FALSE), ] %>%
   st_intersection(occitanie) # on rogne les cellules de la frontière
 
-ggplot() +
-  geom_sf(data = grid_sf$grid, lwd = 0.1) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) + 
-  theme_void()
+# ggplot() +
+#   geom_sf(data = grid_sf$grid, lwd = 0.1) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) + 
+#   theme_void()
 
 # Surface exacte des cellules en occitanie
 grid_sf$area <- st_area(grid_sf)
@@ -133,12 +132,11 @@ for (annee in periode) {
 # ajout des covariables dans grif_sf
 grid_sf <- cbind(grid_sf, temp_min)
 
-# plot
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = tmin_2019)) +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# ggplot() +
+#   geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = tmin_2019)) +
+#   scale_fill_viridis_c() +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
 # save(grid_sf, file = "RData/50km2/grid_sf_50km2.RData")
 
@@ -158,12 +156,12 @@ prec_cum <- terra::extract(poccitanie_cum, grid_sf) %>%
 # ajout des covariables dans grif_sf
 grid_sf <- cbind(grid_sf, prec_cum)
 
-# plot
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = pcum_2019)) +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# # plot
+# ggplot() +
+#   geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = pcum_2019)) +
+#   scale_fill_viridis_c() +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
 # save(grid_sf, file = "RData/50km2/grid_sf_50km2.RData")
 
@@ -191,14 +189,14 @@ grid_sf <- grid_sf %>%
 # On remplace les NA par 0 (pas de jointure = pas de terres agricoles)
 grid_sf$agri_cover[is.na(grid_sf$agri_cover)] <- 0
 
-# plot
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = as.numeric(agri_cover))) +
-  scale_fill_viridis_c(
-    labels = scales::percent_format()
-  ) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# # plot
+# ggplot() +
+#   geom_sf(data = grid_sf, lwd = 0.1, color = NA, aes(fill = as.numeric(agri_cover))) +
+#   scale_fill_viridis_c(
+#     labels = scales::percent_format()
+#   ) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
 # save(grid_sf, file = "RData/50km2/grid_sf_50km2.RData")
 
@@ -226,12 +224,12 @@ grid_sf <- grid_sf %>%
   mutate(logdensity = log(as.numeric(hab/area) + 10^(-20))) %>% # valeur arbitraire pour éviter le 0
   select(-hab)
 
-# Plot
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = logdensity)) +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# # Plot
+# ggplot() +
+#   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = logdensity)) +
+#   scale_fill_viridis_c() +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
 # save(grid_sf, file = "RData/50km2/grid_sf_50km2.RData")
 
@@ -246,13 +244,13 @@ index <- st_nearest_feature(centroide, chemins)
 # On garde la distance associée
 grid_sf$dist_chemins <- st_distance(centroide, chemins[index,], by_element = TRUE)
 
-# plot
-ggplot() +
-  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_chemins))) +
-  scale_fill_viridis_c(
-  ) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# # plot
+# ggplot() +
+#   geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_chemins))) +
+#   scale_fill_viridis_c(
+#   ) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
 # save(grid_sf, file = "RData/50km2/grid_sf_50km2.RData")
 
@@ -267,13 +265,13 @@ index <- st_nearest_feature(centroide, routes)
 # On garde la distance associée
 grid_sf$dist_routes <- st_distance(centroide, routes[index,], by_element = TRUE)
 
-# plot
-ggplot() +
-  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_routes))) +
-  scale_fill_viridis_c(
-  ) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# # plot
+# ggplot() +
+#   geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_routes))) +
+#   scale_fill_viridis_c(
+#   ) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
 # save(grid_sf, file = "RData/50km2/grid_sf_50km2.RData")
 
@@ -284,13 +282,13 @@ rm(routes)
 
 grid_sf$dist_acces <- pmin(grid_sf$dist_chemins, grid_sf$dist_routes)
 
-# plot
-ggplot() +
-  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_acces))) +
-  scale_fill_viridis_c(
-  ) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# # plot
+# ggplot() +
+#   geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_acces))) +
+#   scale_fill_viridis_c(
+#   ) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
 # save(grid_sf, file = "RData/50km2/grid_sf_50km2.RData")
 
@@ -303,13 +301,13 @@ index <- st_nearest_feature(centroide, rivieres)
 # On garde la distance associée
 grid_sf$dist_rivieres <- st_distance(centroide, rivieres[index,], by_element = TRUE)
 
-# plot 
-ggplot() +
-  geom_sf(data = grid_sf[as.numeric(grid_sf$dist_rivieres)!=0,], color = NA, aes(fill = as.numeric(dist_rivieres))) +
-  scale_fill_viridis_c(
-  ) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# # plot 
+# ggplot() +
+#   geom_sf(data = grid_sf[as.numeric(grid_sf$dist_rivieres)!=0,], color = NA, aes(fill = as.numeric(dist_rivieres))) +
+#   scale_fill_viridis_c(
+#   ) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
 # save(grid_sf, file = "RData/50km2/grid_sf_50km2.RData")
 
@@ -324,13 +322,13 @@ index <- st_nearest_feature(centroide, plan_eau_tot)
 # On garde la distance associée
 grid_sf$dist_plan_eau <- st_distance(centroide, plan_eau_tot[index,], by_element = TRUE)
 
-# plot
-ggplot() +
-  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_plan_eau))) +
-  scale_fill_viridis_c(
-  ) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# # plot
+# ggplot() +
+#   geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_plan_eau))) +
+#   scale_fill_viridis_c(
+#   ) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
 # save(grid_sf, file = "RData/50km2/grid_sf_50km2.RData")
 
@@ -340,13 +338,13 @@ rm(plan_eau_tot, index)
 
 grid_sf$dist_eau <- pmin(grid_sf$dist_rivieres, grid_sf$dist_plan_eau)
 
-# plot
-ggplot() +
-  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_eau))) +
-  scale_fill_viridis_c(
-  ) +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# # plot
+# ggplot() +
+#   geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(dist_eau))) +
+#   scale_fill_viridis_c(
+#   ) +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
 # save(grid_sf, file = "RData/50km2/grid_sf_50km2.RData")
 
@@ -378,15 +376,16 @@ grid_sf <- grid_sf %>%
   mutate(across(starts_with("dgbif"), ~log(as.numeric(.x) + 10^(-12)), .names = "log_{.col}"))  
 # 10^(-12) valeur artificielle à déterminer...
 
-# plot
-ggplot() +
-  geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(log_dgbif_2019))) +
-  scale_fill_viridis_c() +
-  geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
-  theme_void()
+# # plot
+# ggplot() +
+#   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(log_dgbif_2019))) +
+#   scale_fill_viridis_c() +
+#   geom_sf(data = occitanie, fill = NA, color = "black", lwd = .5) +
+#   theme_void()
 
+rm(nobs_gbif)
 
 # Enregistrement de la grille --------------------------------------------------
 
-save(grid_sf, file = "RData/50km2/grid_sf_50km2.RData")
+save(grid_sf, file = "grid_sf_5km2.RData")
 
