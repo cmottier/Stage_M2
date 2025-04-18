@@ -53,3 +53,5 @@ rsconnect/
 
 # Dossiers non suivis
 /Donnees_inutiles
+/Resultats_MCMC
+
