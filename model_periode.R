@@ -206,7 +206,7 @@ estim_param <- function(grid, modele, effort, annee) {
 
 ## Lancement et sauvegarde #################
 
-periode = 2016:2020
+periode = 2010:2015
 
 for (annee in periode) {
   print(annee)
@@ -216,10 +216,10 @@ for (annee in periode) {
     value = estim_param(
       grid = grid_sf,
       modele = 1,
-      effort = "prox",
+      effort = "gbif",
       annee = annee
     )
   )
 }
 
-save.image(file = "result_uni_prox_2010_2015.RData")
+save.image(file = "result_uni_gbif_2010_2015.RData")
