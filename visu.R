@@ -34,7 +34,7 @@ for (annee in periode) {
   resume <- rbind(resume, resume_out)
 }
 
-save(resume, file = "Resultats_MCMC/5km2/coeff_periode_uni_prox.RData")
+# save(resume, file = "Resultats_MCMC/5km2/coeff_periode_uni_gbif.RData")
 
 # plot 
 p <- ggplot(data = resume,
@@ -49,7 +49,7 @@ p <- ggplot(data = resume,
   geom_pointrange(position = position_dodge(width = .8)) +
   labs(
     title = "Evolution des coefficients",
-    subtitle = "Modèle à une détection, effort : distance aux accès",
+    subtitle = "Modèle à une détection, effort : données GBIF",
     x = "",
     y = "",
     color = "Année"
@@ -57,7 +57,7 @@ p <- ggplot(data = resume,
   scale_y_discrete(
     labels = c(
       "intercept_eff",
-      "dist_acces",
+      "densité GBIF",
       "intercept_int",
       "dist_eau",
       "logdensite",
@@ -73,6 +73,24 @@ p <- ggplot(data = resume,
 
 
 ## Plot des intensités et probabilités #######################
+
+for (a in periode) {
+  coeffs <- resume %>%
+    filter(annee == a) %>%
+    filter(str_detect(param, "beta")) %>%
+    select(param, median)
+  assign(paste0("lambda_", a),
+         exp(coeffs$median[1] +
+             coeffs$median[2] * scale(grid_sf$dist_eau)[,1] +
+             coeffs$median[3] * scale(grid_sf$logdensity)[,1] +
+             coeffs$median[4] * scale(grid_sf$agri_cover)[,1] +
+             coeffs$median[5] * scale(grid_sf[[paste0("pcum_", a)]])[,1] +
+             coeffs$median[6] * scale(grid_sf[[paste0("tmin_", a)]])[,1] +
+             log(as.numeric(units::set_units(grid_sf$area,"km^2")))))
+  assign(paste0("p_", a),
+         1-exp(-get(paste0("lambda_",a))))
+}
+
 
 # Intensité 
 plot_l <- do.call(

@@ -1,22 +1,102 @@
-# Librairies utiles ------------------------------------------------------------
+################################################################################
+#               Extraction de la population - Meso@LR                          #
+################################################################################
+
+# /!\ à lancer sur le cluster
+
+library(tidyverse)
+library(sf)
+# library(ggplot2)
+
+# # contours des départements d'Occitanie
+# dpts_occitanie <- st_read("Data/departements-d-occitanie.shp") 
+# 
+# # contours de la région
+# occitanie <- dpts_occitanie %>% st_union()
+# 
+# rm(dpts_occitanie)
+# 
+# # Box
+# occitanie_box <- st_bbox(c(
+#   xmin = -0.4,
+#   xmax = 5,
+#   ymax = 45.1,
+#   ymin = 42
+# ), crs = st_crs(4326)) %>%
+#   st_as_sfc() %>%
+#   st_transform(crs = st_crs(occitanie))
+# 
+# # Extrcation de la population utile
+# pop <- st_read("Data/grid_1km_surf.gpkg") %>%
+#   st_transform(crs = st_crs(occitanie)) %>%
+#   st_crop(occitanie_box) %>%
+#   st_intersection(occitanie)
+# 
+# # sauvegarde de la sortie
+# save(pop, file = "pop.RData")
+
+# # plot
+# ggplot() +
+#   geom_sf(data = pop, aes(fill = log(TOT_P_2021))) +
+#   scale_fill_viridis_c()
+
+
+load("pop.RData")
+load("Data/grid_sf_5km2.RData")
+
+
+# # Comparaison
+# print("calcul de difference")
+# Diff <- st_sym_difference(agri12, agri18)
+# 
+# save(Diff, file = "Diff.RData")
+
+# Avec la grille
+grid_pop <- pop %>%
+  st_transform(crs = st_crs(grid_sf)) %>%
+  select(TOT_P_2011, TOT_P_2018, TOT_P_2021, geometry) %>%
+  st_intersection(grid_sf) %>%
+  group_by(grid_id) %>%
+  summarise(hab_2021 = sum(TOT_P_2021), hab_2011 = sum(TOT_P_2011), hab_2018 = sum(TOT_P_2018)) %>%
+  as_tibble() %>%
+  select(-geometry)
+
+  
+# Densité 
+grid_pop_evol <- grid_sf %>% 
+  select(grid_id, area, grid) %>%
+  full_join(grid_pop, by = "grid_id") %>%
+  mutate(logdensity_2021 = log(as.numeric(hab_2021/area) + 10^(-20))) %>% 
+  mutate(logdensity_2011 = log(as.numeric(hab_2011/area) + 10^(-20))) %>% 
+  mutate(logdensity_2018 = log(as.numeric(hab_2018/area) + 10^(-20)))
+
+
+save(grid_pop_evol, file = "grid_pop.RData")
+
+# Etude des différences de la grille
+grid_pop_evol <- grid_pop_evol %>%
+  mutate(diff_11_21 = abs(grid_pop_evol$logdensity_2021 - grid_pop_evol$logdensity_2011))
+
+sum(grid_pop_evol$diff_11_21 != 0) # la plupart des cellules contient un changement
+summary(grid_pop_evol$diff_11_21)
+
+
+
+ggplot() +
+  geom_sf(data = grid_pop_evol, aes(fill = diff_11_21)) +
+  scale_fill_viridis_c() +
+  theme_void()
+
+ggplot() +
+  geom_sf(data = grid_pop_evol, aes(fill = as.numeric(diff_11_21>1))) +
+  scale_fill_viridis_c() +
+  theme_void()
+
+
+# Différences entre les modèles obtenus
 
 library(nimble)
-library(sf)
-library(tidyverse)
-
-
-# Chargement et travail préalable sur grid -------------------------------------
-
-# Chargement de la grille complète
-load("grid_sf_5km2.RData")
-
-# # on garde les cellules qui intersectent à au moins 10%
-# grid_selec <- grid_selec %>%
-#   filter(as.numeric(area)>0.1*max(as.numeric(area)))
-
-# # on renumérote les cellules de la sélection
-# grid_selec$grid_id = 1:lengths(grid_selec)[1] 
-
+library(MCMCvis)
 
 # Codes Nimble -----------------------------------------------------------------
 
@@ -52,51 +132,11 @@ code_uni <- nimbleCode({
   for(i in 1:6){
     beta[i] ~ dnorm(0, sd = 2)
   }
-
+  
   for(j in 1:2){
     alpha[j] ~ dnorm(0, sd = 2)
   }
 })
-
-
-# Multiples détections par cellule
-
-code_multi <- nimbleCode({
-  # intensité et effort pour toutes les cellules
-  for(pixel in 1:npixel){
-    # intensité
-    log(lambda[pixel]) <- beta[1] +
-      beta[2] * x_1[pixel] +
-      beta[3] * x_2[pixel] +
-      beta[4] * x_3[pixel] + 
-      beta[5] * x_4[pixel] + 
-      beta[6] * x_5[pixel] + 
-      cell_area[pixel]
-    # effort
-    logit(b[pixel]) <-  alpha[1] + alpha[2] * h_1[pixel]
-  }
-  
-  # pour les nobs observations (obs_pixel)
-  obs_denominator <- inprod(lambda[1:npixel], b[1:npixel]) / nobs
-  
-  for(obs in 1:nobs){
-    ones[obs] ~ dbern(
-      exp(
-        log(lambda[obs_pixel[obs]] * b[obs_pixel[obs]]) -
-          obs_denominator)   
-      / CONSTANT) 
-  }
-  
-  # Priors 
-  for(i in 1:6){
-    beta[i] ~ dnorm(0, sd = 2)
-  }
-
-  for(j in 1:2){
-    alpha[j] ~ dnorm(0, sd = 2)
-  }
-})
-
 
 
 # Estimation -------------------------------------------------------------------
@@ -138,11 +178,11 @@ estim_param <- function(grid, modele, effort, annee) {
   # Variables 
   data <- list(cell_area = logarea,
                x_1 = scale(grid$dist_eau)[,1],
-               x_2 = scale(grid$logdensity)[,1],
+               x_2 = scale(grid_pop_evol$logdensity_2021)[,1],
                x_3 = scale(grid$agri_cover)[,1],
                x_4 = scale(grid[[paste0("pcum_", annee)]])[,1],
                x_5 = scale(grid[[paste0("tmin_", annee)]])[,1]
-               )
+  )
   
   if (effort == 'prox') {
     data$h_1 <- scale(grid$dist_acces)[, 1]
@@ -155,7 +195,7 @@ estim_param <- function(grid, modele, effort, annee) {
   else {
     data$ones <- rep(1, nobs)
   }
-
+  
   
   constants <- list(
     npixel = npix,
@@ -164,7 +204,7 @@ estim_param <- function(grid, modele, effort, annee) {
     CONSTANT = 50000,
     po_pixel = pixel.id.det,
     obs_pixel = obs_pixel
-    ) 
+  ) 
   
   # Initialisation
   inits <- function(){
@@ -203,23 +243,18 @@ estim_param <- function(grid, modele, effort, annee) {
   return(out)
 }
 
+set.seed(123)
+out_pop_2011 <- estim_param(grid_sf, 1, "prox", 2018)
+set.seed(123)
+out_pop_2018 <- estim_param(grid_sf, 1, "prox", 2018)
+set.seed(123)
+out_pop_2021 <- estim_param(grid_sf, 1, "prox", 2018)
 
-## Lancement et sauvegarde #################
+MCMCsummary(out_pop_2011)      
+MCMCsummary(out_pop_2018)
+MCMCsummary(out_pop_2021)
 
-periode = 2021:2024
 
-for (annee in periode) {
-  print(annee)
-  set.seed(123)
-  assign(
-    x = paste0("outMCMC_", annee),
-    value = estim_param(
-      grid = grid_sf,
-      modele = 1,
-      effort = "gbif",
-      annee = annee
-    )
-  )
-}
 
-save.image(file = "result_uni_gbif_2021_2024.RData")
+
+

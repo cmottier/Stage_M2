@@ -4,17 +4,29 @@
 
 ### Les scripts
 
--   **`Ragondins_2019.R`** contient le code permettant de créer la table `grid_sf` contenant toutes les données nécessaires sur l'année 2019 : observations de ragondins et covariables (par unité d'aire). Le nettoyage des cellules génantes de la frontière n'est pas fait dans ce code.
+-   **`Donnees_brutes.R`** contient le code permettant d'extraire les données nécessaires et de les ramener à l'échelle de l'Occitanie (avec ou sans buffer selon le cas). Les variables construites sont enregistrées dans le dossier `Data/A_charger`.
 
--   **`model_ragondins_2019.R`** contient le code pour fitter les différents modèles associés à l'année 2019 : en fonction de l'approche de l'effort retenue et du nombre d'observations considéré par cellule.
+-   **`Construction_grille.R`** contient le code permettant de construire la table `grid_sf` donnant la grille à l'échelle voulue et contenant toutes les données associées sur la période 2010-2024 : observations de ragondins et covariables.
 
--   **`buffer_eau.R`** permet de construire le buffer autour des rivières et plans d'eau d'Occitanie.
+-   **`model_periode.R`** contient le code permettant de fitter les différents modèles associés à la période voulue : en fonction de l'approche de l'effort retenue et du nombre d'observations considéré par cellule.
 
 -   **`mapview.R`** contient les essais d'utilisation du package mapview.
 
+-   **`visu.R`** contient le code nécessaire pour les vérifications et études visuelles des modèles obtenus.
+
+-   **`CLC_evolution12-18.R`** et **`Script_CLC.R`** contiennent le code permettant de mettre en évidence les changements minimes de couverture agricole entre les données de 2012 et de 2018 de la base Corine Land Cover.
+
+-   **`Script_pop.R`**
+
 -   Le dossier *Anciens_codes* contient les scripts de travail portant sur les différents éléments.
 
-### RData
+### Les données
+
+Le dossier `Data` contient les bases de données utilisées, ainsi que le dossier `A_charger` qui rassemble les sorties de **`Donnees_brutes.R`** résumant les données utiles à la construction de la grille.
+
+### RData 
+
+(à mettre à jour)
 
 Ce dossier contient les fichiers .RData permettant de charger des variables de l'environnement R sans avoir à tout recompiler.
 
@@ -33,5 +45,7 @@ Ce dossier contient les fichiers .RData permettant de charger des variables de l
     -   dist : si la présence d'eau est décrite à partir des distances aux plans d'eau et aux rivières
 
 ### Images
+
+(à mettre à jour)
 
 Ce dossier contient les cartes d'intensité, d'effort et de probabilité de présence obtenues à partir des différents modèles.
