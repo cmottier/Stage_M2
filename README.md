@@ -24,7 +24,7 @@
 
 Le dossier `Data` contient les bases de données utilisées, ainsi que le dossier `A_charger` qui rassemble les sorties de **`Donnees_brutes.R`** résumant les données utiles à la construction de la grille.
 
-### RData 
+### RData
 
 (à mettre à jour)
 

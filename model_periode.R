@@ -3,6 +3,7 @@
 library(nimble)
 library(sf)
 library(tidyverse)
+library(MCMCvis)
 
 
 # Chargement et travail préalable sur grid -------------------------------------
@@ -56,6 +57,7 @@ code_uni <- nimbleCode({
   for(j in 1:2){
     alpha[j] ~ dnorm(0, sd = 2)
   }
+  
 })
 
 
@@ -95,6 +97,7 @@ code_multi <- nimbleCode({
   for(j in 1:2){
     alpha[j] ~ dnorm(0, sd = 2)
   }
+  
 })
 
 
@@ -206,13 +209,13 @@ estim_param <- function(grid, modele, effort, annee) {
 
 ## Lancement et sauvegarde #################
 
-periode = 2021:2024
+periode = 2021:2021
 
 for (annee in periode) {
   print(annee)
   set.seed(123)
   assign(
-    x = paste0("outMCMC_", annee),
+    x = paste0("summary_outMCMC_", annee),
     value = estim_param(
       grid = grid_sf,
       modele = 1,
@@ -222,4 +225,4 @@ for (annee in periode) {
   )
 }
 
-save.image(file = "result_uni_gbif_2021_2024.RData")
+save.image(file = "out_uni_gbif_2021_2021.RData")

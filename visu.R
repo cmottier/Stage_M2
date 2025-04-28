@@ -70,6 +70,16 @@ p <- ggplot(data = resume,
 # ggsave(plot = p, "Image/periode_uni_prox.png", dpi = 600)
 
 
+## Distributions des intensités, efforts, probabilités ##############
+
+annee = 2020
+
+out <- get(paste0("outMCMC_", annee))
+
+MCMCsummary(out, param=c("alpha", "beta"))
+MCMCtrace(out, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
+
+
 
 
 ## Plot des intensités et probabilités #######################
