@@ -16,7 +16,9 @@
 
 -   **`CLC_evolution12-18.R`** et **`Script_CLC.R`** contiennent le code permettant de mettre en évidence les changements minimes de couverture agricole entre les données de 2012 et de 2018 de la base Corine Land Cover.
 
--   **`Script_pop.R`**
+-   **`Script_pop.R`** contient le code permettant de mettre en évidence les changements de densité de population entre les données eurostat de 2011, 2018, 2021 et leurs influences sur les modèles.
+
+-   **`Distrib_IEP.R`** contient le code pour transformer les simulations MCMC des coefficients du modèle en simulations de l'intensité, de l'effort et de la probabilité de présence et d'en déduire les estimateurs associés ainsi que leurs écart-types. Ceci permet d'obtenir les cartes associées.
 
 -   Le dossier *Anciens_codes* contient les scripts de travail portant sur les différents éléments.
 

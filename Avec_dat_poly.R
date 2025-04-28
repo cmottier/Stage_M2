@@ -1,80 +1,72 @@
-################################################################################
-#          Ajustement du modèle de régression - approche bayésienne            #
-################################################################################
-
-# /!\ Modèle à sélectionner : effort voulu et nombre d'observations par cellule
-# 
-# Lasso bayésien implémenté via le choix du prior des coefficients beta
-
-
-# Librairies utiles ------------------------------------------------------------
-
-library(nimble)
-library(sf)
+library(ggplot2)
 library(tidyverse)
+library(sf)
+library(nimble)
 library(MCMCvis)
 
+## Occitanie #############
 
-# Chargement et travail préalable sur grid -------------------------------------
+# contours des départements d'Occitanie
+dpts_occitanie <- st_read("Data/departements-d-occitanie.shp") 
 
-# Chargement de la grille complète
-load("grid_sf_5km2.RData")
+# contours de la région
+occitanie <- dpts_occitanie %>% st_union()
 
-# # on garde les cellules qui intersectent à au moins 10%
-# grid_selec <- grid_selec %>%
-#   filter(as.numeric(area)>0.1*max(as.numeric(area)))
-
-# # on renumérote les cellules de la sélection
-# grid_selec$grid_id = 1:lengths(grid_selec)[1] 
+rm(dpts_occitanie)
 
 
-# Codes Nimble -----------------------------------------------------------------
+## Ragondins #############
 
-# Une détection seule par cellule
+periode = (2010:2024)
 
-code_uni <- nimbleCode({
-  # intensité et effort pour toutes les cellules
-  for(pixel in 1:npixel){
-    # intensité
-    log(lambda[pixel]) <- beta[1] +
-      beta[2] * x_1[pixel] +
-      beta[3] * x_2[pixel] +
-      beta[4] * x_3[pixel] + 
-      beta[5] * x_4[pixel] + 
-      beta[6] * x_5[pixel] +
-      cell_area[pixel] 
-    # effort
-    logit(b[pixel]) <-  alpha[1] + alpha[2] * h_1[pixel]
-  }
-  
-  # loi jointe, pour les m cellules contenant une détection (po_pixel)
-  po_denominator <- inprod(lambda[1:npixel], b[1:npixel]) / m
-  
-  for(po in 1:m){
-    ones[po] ~ dbern(
-      exp(
-        log(lambda[po_pixel[po]] * b[po_pixel[po]]) -
-          po_denominator)
-      / CONSTANT) 
-  }
-  
-  # Priors 
-  beta[1] ~ dnorm(0, sd = 2) # intercept
-  for(i in 2:6){
-    beta[i] ~ ddexp(0, tau) 
-  }
-  tau ~ dunif(0.001,10)
-  
-  # for(i in 1:6){
-  #   beta[i] ~ dnorm(0, sd = 2)
-  # }
+# Import des données
+nutria_pts <- st_read("Data/CEN_2025/Ragondin_rat_musque_pts_2025.shp") %>%
+  mutate(year = year(as.Date(DateDebut))) %>% 
+  filter(year %in% periode) %>%
+  filter(NomVernacu == "Ragondin") 
 
-  for(j in 1:2){
-    alpha[j] ~ dnorm(0, sd = 2)
-  }
-  
-})
+nutria_poly <- st_read("Data/CEN_2025/Ragondin_rat_musque_poly_2025.shp") %>%
+  mutate(year = year(as.Date(DateDebut))) %>% 
+  filter(year %in% periode) %>%
+  filter(NomVernacu == "Ragondin") %>%
+  mutate(pts = st_centroid(geometry)) %>%
+  st_set_geometry(nutria_poly$pts)
 
+# ggplot() +
+#   geom_sf(data = nutria_poly) +
+#   geom_sf(data = nutria_poly$pts)
+
+# changement de format
+occitanie <- occitanie %>%
+  st_transform(crs = st_crs(nutria_pts))
+
+# Les ragondins d'Occitanie
+nutria_pts <- st_intersection(nutria_pts, occitanie)
+nutria_poly <- st_intersection(nutria_poly, occitanie)
+
+table(nutria_pts$year)
+table(nutria_poly$year)
+
+nutria_pts <- st_transform(nutria_pts, crs = st_crs(grid_sf))
+nutria_poly <- st_transform(nutria_poly, crs = st_crs(grid_sf))
+
+# # Nombre d'observations de ragondins par cellules, points uniquement
+# for (annee in periode) {
+#   nutria_annee <- nutria_pts %>%
+#     filter(year == annee)
+#   grid_sf[,paste0("nnutria", annee)] <- lengths(st_intersects(grid_sf, nutria_annee))
+# }
+
+# Nombre d'observations de ragondins par cellules, points et polygones réunis
+for (annee in periode) {
+  nutria_poly_annee <- nutria_poly %>%
+    filter(year == annee)
+  grid_sf[, paste0("nnutria_pts_pol_", annee)] <- grid_sf[[paste0("nnutria", annee)]] +
+    lengths(st_intersects(grid_sf, nutria_poly_annee))
+}
+
+
+## Modele ############
 
 # Multiples détections par cellule
 
@@ -114,7 +106,7 @@ code_multi <- nimbleCode({
   # for(i in 1:6){
   #   beta[i] ~ dnorm(0, sd = 2)
   # }
-
+  
   for(j in 1:2){
     alpha[j] ~ dnorm(0, sd = 2)
   }
@@ -166,7 +158,7 @@ estim_param <- function(grid, modele, effort, annee) {
                x_3 = scale(grid$agri_cover)[,1],
                x_4 = scale(grid[[paste0("pcum_", annee)]])[,1],
                x_5 = scale(grid[[paste0("tmin_", annee)]])[,1]
-               )
+  )
   
   if (effort == 'prox') {
     data$h_1 <- scale(grid$dist_acces)[, 1]
@@ -179,7 +171,7 @@ estim_param <- function(grid, modele, effort, annee) {
   else {
     data$ones <- rep(1, nobs)
   }
-
+  
   
   constants <- list(
     npixel = npix,
@@ -188,7 +180,7 @@ estim_param <- function(grid, modele, effort, annee) {
     CONSTANT = 50000,
     po_pixel = pixel.id.det,
     obs_pixel = obs_pixel
-    ) 
+  ) 
   
   # Initialisation
   inits <- function(){
@@ -230,27 +222,15 @@ estim_param <- function(grid, modele, effort, annee) {
 
 ## Lancement et sauvegarde #################
 
-periode = 2021:2021
+annee <- 2018
 
-for (annee in periode) {
-  print(annee)
-  set.seed(123)
-  # assign(
-  #   x = paste0("outMCMC_", annee),
-  #   value = estim_param(
-  #     grid = grid_sf,
-  #     modele = 1,
-  #     effort = "gbif",
-  #     annee = annee
-  #   )
-  # )
-  out <- estim_param(
-    grid = grid_sf,
-    modele = 1,
-    effort = "gbif",
-    annee = annee
-  )
-  save(out, file = paste0("out_uni_gbif_", annee, ".RData"))
-}
+out_pts_only <- estim_param(
+  grid = grid_sf,
+  modele = 2,
+  effort = "gbif",
+  annee = annee
+)
 
-# save.image(file = "out_uni_gbif_2021_2021.RData")
+MCMCsummary(out_pts_only)
+
+save(out_pts_only, file = "Resultats_MCMC/test_poly.RData")
