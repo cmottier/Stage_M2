@@ -20,6 +20,8 @@
 
 -   **`Distrib_IEP.R`** contient le code pour transformer les simulations MCMC des coefficients du modèle en simulations de l'intensité, de l'effort et de la probabilité de présence et d'en déduire les estimateurs associés ainsi que leurs écart-types. Ceci permet d'obtenir les cartes associées.
 
+-   **`Ajout_dat_poly.R`** permet de comparer les modèles obtenus en utilisant les données ponctuelles seules ou les données ponctuelles et les centroïdes des polygones. La décision a été prise de continuer à travailler avec les données ponctuelles seules.
+
 -   Le dossier *Anciens_codes* contient les scripts de travail portant sur les différents éléments.
 
 ### Les données

@@ -3,6 +3,12 @@ library(tidyverse)
 library(sf)
 library(nimble)
 library(MCMCvis)
+library(patchwork)
+
+# On charge la grille déjà construite
+load("grid_sf_5km2.RData")
+
+
 
 ## Occitanie #############
 
@@ -15,32 +21,46 @@ occitanie <- dpts_occitanie %>% st_union()
 rm(dpts_occitanie)
 
 
-## Ragondins #############
+
+
+## Données ragondins #############
 
 periode = (2010:2024)
 
-# Import des données
+# Données pts
 nutria_pts <- st_read("Data/CEN_2025/Ragondin_rat_musque_pts_2025.shp") %>%
   mutate(year = year(as.Date(DateDebut))) %>% 
   filter(year %in% periode) %>%
   filter(NomVernacu == "Ragondin") 
 
+# Données poly
 nutria_poly <- st_read("Data/CEN_2025/Ragondin_rat_musque_poly_2025.shp") %>%
   mutate(year = year(as.Date(DateDebut))) %>% 
   filter(year %in% periode) %>%
   filter(NomVernacu == "Ragondin") %>%
-  mutate(pts = st_centroid(geometry)) %>%
-  st_set_geometry(nutria_poly$pts)
+  mutate(pts = st_centroid(geometry)) # On construit les centroïdes
 
-# ggplot() +
-#   geom_sf(data = nutria_poly) +
-#   geom_sf(data = nutria_poly$pts)
+# plot des poly
+do.call(
+  wrap_plots,
+  lapply(periode,
+         function(x) {
+           ggplot() +
+             geom_sf(data = nutria_poly %>% filter(year == x), fill = NA) +
+             geom_sf(data = occitanie %>% st_transform(crs = st_crs(nutria_poly)), fill = NA) +
+             geom_sf(data = nutria_poly %>% filter(year == x) %>% select(pts))
+         })
+)
+
+# On garde les centroïdes pour la géométrie
+nutria_poly <- nutria_poly %>%
+  st_set_geometry(nutria_poly$pts)
 
 # changement de format
 occitanie <- occitanie %>%
   st_transform(crs = st_crs(nutria_pts))
 
-# Les ragondins d'Occitanie
+# Les ragondins d'Occitanie uniquement
 nutria_pts <- st_intersection(nutria_pts, occitanie)
 nutria_poly <- st_intersection(nutria_poly, occitanie)
 
@@ -50,7 +70,13 @@ table(nutria_poly$year)
 nutria_pts <- st_transform(nutria_pts, crs = st_crs(grid_sf))
 nutria_poly <- st_transform(nutria_poly, crs = st_crs(grid_sf))
 
-# # Nombre d'observations de ragondins par cellules, points uniquement
+
+ggplot() + 
+  geom_sf(data = nutria_pts %>% filter(year == 2018), col = "royalblue") +
+  geom_sf(data = nutria_poly %>% filter(year == 2018)) +
+  geom_sf(data = occitanie, fill = NA)
+
+# # Nombre d'observations de ragondins par cellules, points uniquement (déjà dans grid)
 # for (annee in periode) {
 #   nutria_annee <- nutria_pts %>%
 #     filter(year == annee)
@@ -115,9 +141,9 @@ code_multi <- nimbleCode({
 
 
 
-# Estimation -------------------------------------------------------------------
+## Estimation ################
 
-## Fonction pour choisir le modèle  ##################
+# /!\ Changer nnutria par nnutria_pts_pol_ pour fitter avec toutes les données (pts et poly)
 
 #' Estimation des paramètres (IPP)
 #'
@@ -136,10 +162,10 @@ estim_param <- function(grid, modele, effort, annee) {
   logarea <- log(s.area)
   
   # ID des cellules où il y a au moins une occurrence
-  pixel.id.det <- grid$grid_id[grid[[paste0("nnutria", annee)]] > 0]
+  pixel.id.det <- grid$grid_id[grid[[paste0("nnutria_pts_pol_", annee)]] > 0]
   
   # Troncature des observations
-  nb_observations <- grid[[paste0("nnutria", annee)]] 
+  nb_observations <- grid[[paste0("nnutria_pts_pol_", annee)]] 
   nb_observations[nb_observations > 50] <- 50 # valeur arbitraire à définir
   
   # nombre total d'observations prises en compte
@@ -224,13 +250,125 @@ estim_param <- function(grid, modele, effort, annee) {
 
 annee <- 2018
 
-out_pts_only <- estim_param(
+out_pts_poly <- estim_param(
   grid = grid_sf,
   modele = 2,
   effort = "gbif",
   annee = annee
 )
 
+MCMCsummary(out_pts_poly)
 MCMCsummary(out_pts_only)
 
-save(out_pts_only, file = "Resultats_MCMC/test_poly.RData")
+MCMCtrace(out_pts_poly, pdf = FALSE, ind = TRUE)
+MCMCtrace(out_pts_only, pdf = FALSE, ind = TRUE)
+
+save(out_pts_only, out_pts_poly, file = "Resultats_MCMC/test_poly.RData")
+
+
+
+## Plot pour comparer les deux résultats obtenus ############################
+
+resume <- NULL
+for (type in c("only", "poly")) {
+  out <- get(paste0("out_pts_", type))
+  resume_out <- MCMCsummary(out) %>%
+    rename(
+      "lower" = "2.5%",
+      "median" = "50%",
+      "upper" = "97.5%"
+    ) %>%
+    mutate(type = type) %>%
+    rownames_to_column("param")
+  resume <- rbind(resume, resume_out)
+}
+
+# plot 
+p <- ggplot(data = resume,
+            aes(
+              y = param,
+              x = median,
+              xmin = lower,
+              xmax = upper,
+              color = as.factor(type)
+            )) +
+  geom_vline(aes(xintercept = 0)) +
+  geom_pointrange(position = position_dodge(width = .8)) +
+  labs(
+    title = "Evolution des coefficients",
+    subtitle = "Modèle à une détection, effort : données GBIF",
+    x = "",
+    y = "",
+    color = "Type"
+  ) +
+  scale_y_discrete(
+    labels = c(
+      "intercept_eff",
+      "densité GBIF",
+      "intercept_int",
+      "dist_eau",
+      "logdensite",
+      "agri",
+      "preci_cum",
+      "temp_min"
+    )
+  )
+p
+
+# ggsave(plot = p, "Image/periode_uni_prox.png", dpi = 600)
+
+
+
+
+# Plot des intensités et probabilités 
+
+for (t in c("poly", "only")) {
+  coeffs <- resume %>%
+    filter(type == t) %>%
+    filter(str_detect(param, "beta")) %>%
+    select(param, median)
+  assign(paste0("lambda_", t),
+         exp(coeffs$median[1] +
+               coeffs$median[2] * scale(grid_sf$dist_eau)[,1] +
+               coeffs$median[3] * scale(grid_sf$logdensity)[,1] +
+               coeffs$median[4] * scale(grid_sf$agri_cover)[,1] +
+               coeffs$median[5] * scale(grid_sf[[paste0("pcum_", annee)]])[,1] +
+               coeffs$median[6] * scale(grid_sf[[paste0("tmin_", annee)]])[,1] +
+               log(as.numeric(units::set_units(grid_sf$area,"km^2")))))
+  assign(paste0("p_", t),
+         1-exp(-get(paste0("lambda_",t))))
+}
+
+
+# Intensité 
+plot_l <- do.call(
+  wrap_plots,
+  lapply(c("poly", "only"),
+         function(x) {
+           ggplot() +
+             geom_sf(data = grid_sf, color = NA, aes(fill = get(paste0("lambda_", x)))) +
+             labs(fill = "Intensité") + 
+             scale_fill_viridis_c(begin = 0, end = 1) +
+             labs(title = x) +
+             theme_light()
+         })
+)
+
+plot_l
+
+
+plot_p <- do.call(
+  wrap_plots,
+  lapply(c("poly", "only"),
+         function(x) {
+           ggplot() +
+             geom_sf(data = grid_sf, color = NA, aes(fill = get(paste0("p_", x)))) +
+             labs(fill = "Probabilité") + 
+             scale_fill_viridis_c(begin = 0, end = 1) +
+             labs(title = x) +
+             theme_light()
+         })
+)
+
+plot_p
+
