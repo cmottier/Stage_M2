@@ -64,7 +64,7 @@ intensite_effort_proba <- function(grid, out, annee) {
   coeff_alpha <- res[,mask_alpha]
   
   for (cell in 1:nrow(grid)) {
-    # print(cell)
+    print(cell)
 
     # intensité
     lambda_simu_cell <- apply(coeff_beta, 1, lambda, var = var_int[cell,], logarea = grid$logarea[cell])
@@ -99,13 +99,13 @@ intensite_effort_proba <- function(grid, out, annee) {
 load("result_uni_gbif_2021_2024.RData")
 
 start <- Sys.time()
-IEP_2021 <- intensite_effort_proba(grid_sf[1:200,], outMCMC_2021, 2021)
+IEP_2021 <- intensite_effort_proba(grid_sf, out, 2021)
 end <- Sys.time()
 print(end - start)
 
-save(IEP_2021, file = "IEP_2021.RData")
+save(IEP_2021, file = "Resultats_MCMC/50km2/IEP_2021.RData")
 
 ggplot() +
-  geom_sf(data = IEP_2021, aes(fill = prob_97.5))
+  geom_sf(data = IEP_2021, aes(fill = lambda_med))
 
 
