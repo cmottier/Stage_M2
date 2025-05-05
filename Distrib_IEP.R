@@ -96,16 +96,17 @@ intensite_effort_proba <- function(grid, out, annee) {
 
 ## Application -----------------------------------------------------------------
 
-load("result_uni_gbif_2021_2024.RData")
+load("out_multi_gbif_2016.RData")
+load("grid_sf_5km2.RData")
 
 start <- Sys.time()
-IEP_2021 <- intensite_effort_proba(grid_sf, out, 2021)
+IEP_2016 <- intensite_effort_proba(grid_sf, out, 2016)
 end <- Sys.time()
 print(end - start)
 
-save(IEP_2021, file = "Resultats_MCMC/50km2/IEP_2021.RData")
+save(IEP_2016, file = "IEP_multi_gbif_l_2016.RData")
 
-ggplot() +
-  geom_sf(data = IEP_2021, aes(fill = lambda_med))
+# ggplot() +
+#   geom_sf(data = IEP_2021, aes(fill = lambda_med))
 
 

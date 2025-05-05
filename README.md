@@ -20,7 +20,11 @@
 
 -   **`Distrib_IEP.R`** contient le code pour transformer les simulations MCMC des coefficients du modèle en simulations de l'intensité, de l'effort et de la probabilité de présence et d'en déduire les estimateurs associés ainsi que leurs écart-types. Ceci permet d'obtenir les cartes associées.
 
+-   **`model_periode_avec_IEP.R`** est une modification de **`model_periode.R`** permettant de garder les simulations de l'intensité, de l'effort et de la probabilité de présence, avec un thinning élevé (pour alléger la mémoire nécessaire). Donne des résultats proches de **`Distrib_IEP.R`** en conservant moins de simulations.
+
 -   **`Ajout_dat_poly.R`** permet de comparer les modèles obtenus en utilisant les données ponctuelles seules ou les données ponctuelles et les centroïdes des polygones. La décision a été prise de continuer à travailler avec les données ponctuelles seules.
+
+-   **`Validation.R`** contient les éléments de validation du modèle de processus ponctuel de Poisson.
 
 -   Le dossier *Anciens_codes* contient les scripts de travail portant sur les différents éléments.
 

@@ -105,7 +105,7 @@ for (a in periode) {
 # Intensité 
 plot_l <- do.call(
   wrap_plots,
-  lapply(2010:2018,
+  lapply(2021:2021,
          function(x) {
            ggplot() +
              geom_sf(data = grid_sf, color = NA, aes(fill = get(paste0("lambda_", x)))) +

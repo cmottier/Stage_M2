@@ -35,14 +35,14 @@ nutria_periode <- nutria_periode %>%
 load("RData/5km2/grid_sf_5km2.RData")
 
 # année étudiée et coefficients estimés associés
-annee <- 2021
+annee <- 2016
 
-load("Resultats_MCMC/5km2/IEP_2021.RData")
+load("Resultats_MCMC/5km2_avec_lasso/IEP_2016.RData")
 
-IEP_2021 <- IEP_2021 %>%
+IEP_2016 <- IEP_2016 %>%
   st_transform(crs = crs_commun)
 
-estim <- IEP_2021 %>%
+estim <- IEP_2016 %>%
   select(grid, lambda_med, b_med)
 
 
@@ -131,12 +131,16 @@ ggplot() +
 
 # Fonction K et enveloppe
 # faut-il mettre une correction ? (edge)
-env_inhom <- envelope(X, Kinhom, nsim = 99, correction = "best",
-                      simulate = expression(rpoispp(lambda_b_hat, win = as.owin(occitanie))))
+env_inhom <- envelope(
+  X,
+  Kinhom,
+  nsim = 99,
+  correction = "best",
+  simulate = expression(rpoispp(lambda_b_hat, win = as.owin(occitanie)))
+)
 plot(env_inhom, main = "Inhomogeneous K-function with Envelopes")
+
 
 # Now we're asking: 
 # "Given the inhomogeneous intensity, are the points still more/less clustered than expected?"
 
-# if from a fitted model, just replace lambda_hat in rpoispp(lambda_hat)
-# by the estimated lambda

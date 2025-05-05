@@ -230,7 +230,7 @@ estim_param <- function(grid, modele, effort, annee) {
 
 ## Lancement et sauvegarde #################
 
-periode = 2021:2021
+periode = 2016:2016
 
 for (annee in periode) {
   print(annee)
@@ -246,11 +246,11 @@ for (annee in periode) {
   # )
   out <- estim_param(
     grid = grid_sf,
-    modele = 1,
+    modele = 2,
     effort = "gbif",
     annee = annee
   )
-  save(out, file = paste0("out_uni_gbif_", annee, ".RData"))
+  save(out, file = paste0("out_multi_gbif_", annee, ".RData"))
 }
 
 # save.image(file = "out_uni_gbif_2021_2021.RData")
