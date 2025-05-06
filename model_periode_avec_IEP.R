@@ -245,7 +245,7 @@ estim_param <- function(grid, modele, effort, annee) {
 
 ## Lancement et sauvegarde #################
 
-periode = 2016:2016
+periode = 2010:2024
 
 for (annee in periode) {
   print(annee)
@@ -265,32 +265,32 @@ for (annee in periode) {
     effort = "gbif",
     annee = annee
   )
-  save(out, file = paste0("out_multi_gbif_iep", annee, ".RData"))
+  save(out, file = paste0("out_multi_gbif_l_iep", annee, ".RData"))
 }
 
-## Plot ############################
-
-MCMCsummary(out$samples, param=c("alpha", "beta"))
-MCMCtrace(out$samples, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
-MCMCplot(out$samples)
-
-# extraction des coefficients
-resume <- MCMCsummary(out$samples) %>%
-    rename(
-      "lower" = "2.5%",
-      "median" = "50%",
-      "upper" = "97.5%"
-    ) %>%
-    rownames_to_column("param")
-
-res <- rbind(out$samples2$chain1, out$samples2$chain2)
-
-# extraction des intensités (médiane)
-mask <- str_detect(colnames(res), "lambda")
-res_lambda <- res[,mask]
-lambdaestim <- apply(res_lambda, 2, median)
-lambdasd <- apply(res_lambda, 2, sd)
-
-ggplot() +
-  geom_sf(data = grid_sf, aes(fill = lambdaestim)) +
-  scale_fill_viridis_c(begin = 0, end = 1)
+# ## Plot ############################
+# 
+# MCMCsummary(out$samples, param=c("alpha", "beta"))
+# MCMCtrace(out$samples, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
+# MCMCplot(out$samples)
+# 
+# # extraction des coefficients
+# resume <- MCMCsummary(out$samples) %>%
+#     rename(
+#       "lower" = "2.5%",
+#       "median" = "50%",
+#       "upper" = "97.5%"
+#     ) %>%
+#     rownames_to_column("param")
+# 
+# res <- rbind(out$samples2$chain1, out$samples2$chain2)
+# 
+# # extraction des intensités (médiane)
+# mask <- str_detect(colnames(res), "lambda")
+# res_lambda <- res[,mask]
+# lambdaestim <- apply(res_lambda, 2, median)
+# lambdasd <- apply(res_lambda, 2, sd)
+# 
+# ggplot() +
+#   geom_sf(data = grid_sf, aes(fill = lambdaestim)) +
+#   scale_fill_viridis_c(begin = 0, end = 1)

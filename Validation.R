@@ -37,7 +37,7 @@ load("RData/5km2/grid_sf_5km2.RData")
 # année étudiée et coefficients estimés associés
 annee <- 2016
 
-load("Resultats_MCMC/5km2_avec_lasso/IEP_2016.RData")
+load("Resultats_MCMC/5km2_avec_lasso/IEP_multi_gbif_l_2016.RData")
 
 IEP_2016 <- IEP_2016 %>%
   st_transform(crs = crs_commun)
@@ -135,7 +135,7 @@ env_inhom <- envelope(
   X,
   Kinhom,
   nsim = 99,
-  correction = "best",
+  # correction = "best",
   simulate = expression(rpoispp(lambda_b_hat, win = as.owin(occitanie)))
 )
 plot(env_inhom, main = "Inhomogeneous K-function with Envelopes")
@@ -143,4 +143,26 @@ plot(env_inhom, main = "Inhomogeneous K-function with Envelopes")
 
 # Now we're asking: 
 # "Given the inhomogeneous intensity, are the points still more/less clustered than expected?"
+
+# essai en prenant une seule observation par position (/!\ et non cellule)
+df <- data.frame(a = 1:length(unique(nutria$geometry)))
+df$geom <- st_sfc(unique(nutria$geometry))
+df <- st_as_sf(df)
+df <- st_set_crs(df, crs_commun)
+
+X_uni <- as.ppp(st_coordinates(df), st_bbox(nutria))
+
+# test CSR (PPP homogène)
+envelope_K_csr_uni <- envelope(X_uni, Kest, nsim = 99)
+plot(envelope_K_csr_uni, main = "CSR Test with Envelopes")
+
+
+env_inhom_uni <- envelope(
+  X_uni,
+  Kinhom,
+  nsim = 99,
+  # correction = "best",
+  simulate = expression(rpoispp(lambda_b_hat, win = as.owin(occitanie)))
+)
+plot(env_inhom_uni, main = "Inhomogeneous K-function with Envelopes")
 
