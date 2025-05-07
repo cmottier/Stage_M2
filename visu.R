@@ -106,7 +106,7 @@ iep <- grid_sf %>%
   select(grid)
 for (annee in periode) {
   # out <- get(paste0("outMCMC_", annee))
-  load(paste0("Resultats_MCMC/5km2/Avec_lasso/out_multi_gbif_l_iep", annee, ".RData"))
+  load(paste0("Resultats_MCMC/5km2_avec_lasso/out_multi_gbif_l_iep", annee, ".RData"))
   res <- rbind(out$samples2$chain1, out$samples2$chain2)
   mask <- str_detect(colnames(res), "lambda")
   res_lambda <- res[,mask]
