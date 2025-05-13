@@ -6,7 +6,7 @@
 library(ggplot2)
 library(tidyverse)
 # library(sf)
-# library(spatstat)
+library(spatstat)
 library(AHMbook)
 library(nimble)
 library(MCMCvis)
@@ -24,11 +24,11 @@ library(plot.matrix)
 
 set.seed(123)
 
-alpha <- c(-2, 1) # effort : b = plogis(-2+1*w)
-beta <- c(3, 1) # intensité : l = exp(6+1*x)
+alpha <- c(-2, -5) # effort : b = plogis(-2+1*w)
+beta <- c(4, 1) # intensité : l = exp(6+1*x)
 
 dat <- simDataDK(
-  sqrt.npix = 50, 
+  sqrt.npix = 100, 
   alpha = alpha, 
   beta = beta, 
   drop.out.prop.pb = 0, 
@@ -497,38 +497,30 @@ summary(abs(
     (bvrai*lambdavraie)
 ))
 
-# # On regarde après normalisation
-# # intensité amincie fittée
-# ggplot()+
-#   geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale( bestim*lambdaestim)[,1]))+
-#   geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-#   scale_fill_viridis_c(begin = 0, end = 1, limits = c(-1,4)) +
-#   labs(fill = "lb", x = "", y = "", title = "intensité amincie fittée, normalisée")
-# 
-# # Vraie intensité amincie 
-# ggplot()+
-#   geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(plogis(-2-dat$wcov)*exp(logarea+6+dat$xcov))[,1]))+
-#   geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-#   scale_fill_viridis_c(begin = 0, end = 1, limits = c(-1,4)) +
-#   labs(fill = "lb", x = "", y = "", title = "vraie intensité amincie , normalisée" )
-# 
-# # Différence
-# ggplot()+
-#   geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(plogis(-2-dat$wcov)*exp(logarea+6+dat$xcov))[,1]-scale(bestim*lambdaestim)[,1]))+
-#   geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-#   scale_fill_viridis_c(begin = 0, end = 1) +
-#   labs(fill = "", x = "", y = "", title = "différence d'intensités amincies normalisées")
-# 
-# # Résumé du taux d'erreur
-# summary(abs(
-#   (scale(plogis(-2-dat$wcov)*exp(logarea+6+dat$xcov))[,1]-scale(bestim*lambdaestim)[,1]) 
-#   / (scale(plogis(-2-dat$wcov)*exp(logarea+6+dat$xcov))[,1])
-# ))
+
 
 
 # Avec le package spatstat -----------------------------------------------------
 
+# test simu...
+pp <- rpoispp(function(x,y) {100 * exp(-3*x)}, 100)
+plot(pp)
 
+data_test <- expand.grid(x = seq(0,1,0.01), y = seq(0,1,0.01))
+data_test$z <- with(data_test, 100 * exp(-3*x))
 
+ggplot(data_test, aes(x = x, y = y, fill = z)) +
+  geom_raster(interpolate = TRUE) +
+  scale_fill_viridis_c()
 
+Z <- as.im(function(x,y){sqrt(x+y)/10}, owin(xrange = c(0,100), yrange = c(0,100)), dimyx = 100)
+# pp <- rpoispp(Z)
+# plot(pp)
+plot(Z)
+# M <- as.matrix.im(Z)
 
+W <- as.im(function(x,y){0.5*exp(-(y-50)^2/400)}, owin(xrange = c(0,100), yrange = c(0,100)), dimyx = 100)
+plot(W)
+plot(Z*W)
+pp <- rpoispp(Z*W)
+plot(pp)
