@@ -14,7 +14,6 @@ library(plot.matrix)
 
 
 
-
 # Avec AHMbook -----------------------------------------------------------------
 
 ## Simulation d'un PPP aminci ###########################
@@ -67,11 +66,12 @@ ggplot() +
   scale_fill_viridis_c() +
   labs(fill = "x", x = "", y = "")
 
+# valeur de la variable d'effort h et observations
 ggplot()+
   geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$wcov))+
   geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
   scale_fill_viridis_c() +
-  labs(fill = "h", x = "", y = "")
+  labs(fill = "w", x = "", y = "")
 
 ## Ajustement du modèle avec effort ##########################
 
