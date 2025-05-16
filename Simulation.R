@@ -12,6 +12,7 @@ library(nimble)
 library(MCMCvis)
 library(plot.matrix)
 library(raster)
+library(patchwork)
 
 # Codes des modèles avec/sans effort -------------------------------------------
 
@@ -158,19 +159,33 @@ ggplot()+
 
 ## Avec le package spatstat ########################################
 
-# Valeurs des covariables aléatoires
+### Covariables aléatoires ############################
 dim <- 50
 X <- matrix(runif(dim*dim, -1, 1), nrow = dim)
-# X <- matrix(rbeta(dim*dim, 0.8, 0.9), nrow = dim)
 X <- (X-mean(X))/sd(X)
 X.im <- as.im(X, square(dim))
 # plot(X.im)
 
-# W <- matrix(runif(dim*dim, -1, 1), nrow = dim)
 W <- matrix(rbeta(dim*dim, 1, 3), nrow = dim)
 W <- (W-mean(W))/sd(W)
 W.im <- as.im(W, square(dim))
 # plot(W.im)
+
+### Covariables construites ##########################
+
+X.im <- as.im(function(x,y){sqrt(x+y)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
+X <- as.matrix.im(X.im)
+X <- (X-mean(X))/sd(X)
+X.im <- as.im(X, square(dim))
+
+# W.im <- as.im(function(x,y){sqrt(dim-x+dim-y)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
+W.im <- as.im(function(x,y){exp(-(y-dim/2)^2/50)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
+W <- as.matrix.im(W.im)
+W <- (W-mean(W))/sd(W)
+W.im <- as.im(W, square(dim))
+
+
+### Construction de dat ##########################
 
 dat <- list()
 dat$npix <- dim*dim
@@ -185,9 +200,6 @@ logarea <- log(area)
 # Valeurs de lambda et b 
 lambda_v <- as.im(area*exp(beta[1]+beta[2]*X), square(dim))
 b_v <- as.im(plogis(alpha[1]+alpha[2]*W), square(dim))
-# plot(lambda)
-# plot(b)
-# plot(b*lambda)
 
 # simulation de l'IPPP
 pp <- rpoispp(b_v*lambda_v)
@@ -195,17 +207,12 @@ pp <- rpoispp(b_v*lambda_v)
 (dat$N.det <- pp$n)
 dat$loc.det <- data.frame(x = pp$x, y = pp$y)
 
-
-# ggplot(as.data.frame(b*lambda), aes(x = x, y = y, fill = value)) +
-#   geom_raster(interpolate = FALSE) +
-#   scale_fill_viridis_c() +
-#   geom_point(data = as.data.frame(pp), aes(x = x, y = y), inherit.aes = FALSE, col = "white", cex = 0.2) 
-
 # identifiant des cellules des observations
 dat$pixel.id.det <- NULL
 for (i in 1:dat$N.det) {
   dat$pixel.id.det[i] <- which(dat$s.loc[1] == floor(pp$x[i]) + 0.5 & dat$s.loc[2] == floor(pp$y[i]) + 0.5)
 }
+
 
 ## Intensités et efforts ###############################
 
@@ -349,44 +356,48 @@ lambdasd_s <- apply(res_s_lambda, 2, sd)
 l_min <- min(dat$lambda, lambdaestim, lambdaestim_s)
 l_max <- max(dat$lambda, lambdaestim, lambdaestim_s)
 
-# Intensité fittée avec effort
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = lambdaestim))+
-  # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
-  labs(fill = "l", x = "", y = "", title = "intensité fittée avec effort")
-
-# Vraie intensité
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda))+
-  # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
-  labs(fill = "l", x = "", y = "", title = "vraie intensité")
-
-# Intensité fittée sans effort
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = lambdaestim_s))+
-  # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
-  labs(fill = "l", x = "", y = "", title = "intensité fittée sans effort")
+wrap_plots(
+  # Intensité fittée avec effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = lambdaestim))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
+    labs(fill = "l", x = "", y = "", title = "intensité fittée avec effort"),
+  
+  # Vraie intensité
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
+    labs(fill = "l", x = "", y = "", title = "vraie intensité"),
+  
+  # Intensité fittée sans effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = lambdaestim_s))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
+    labs(fill = "l", x = "", y = "", title = "intensité fittée sans effort")
+)
 
 # Différence entre vraie et avec effort
 
 dl_min <- min(dat$lambda-lambdaestim, dat$lambda-lambdaestim_s)
 dl_max <- max(dat$lambda-lambdaestim, dat$lambda-lambdaestim_s)
 
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda-lambdaestim))+
-  # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(dl_min, dl_max)) +
-  labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités (vraie - estimée avec effort)")
-
-# Différence entre vraie et sans effort
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda-lambdaestim_s))+
-  # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(dl_min, dl_max)) +
-  labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités (vraie - estimée sans effort)")
+wrap_plots(
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda-lambdaestim))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(dl_min, dl_max)) +
+    labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités (vraie - estimée avec effort)"),
+  
+  # Différence entre vraie et sans effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda-lambdaestim_s))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(dl_min, dl_max)) +
+    labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités (vraie - estimée sans effort)")
+)
 
 # Taux d'erreur entre vraie et avec effort
 summary(abs(
@@ -406,43 +417,47 @@ summary(abs(
 sl_min <- min(scale(dat$lambda)[,1], scale(lambdaestim)[,1], scale(lambdaestim_s)[,1])
 sl_max <- max(scale(dat$lambda)[,1], scale(lambdaestim)[,1], scale(lambdaestim_s)[,1])
 
-# Intensité normalisée fittée avec effort
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(lambdaestim)[,1]))+
-  # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
-  labs(fill = "l", x = "", y = "", title = "intensité normalisée estimée avec effort")
-
-# Vraie intensité normalisée
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]))+
-  # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
-  labs(fill = "l", x = "", y = "", title = "vraie intensité normalisée")
-
-# Intensité normalisée fittée sans effort
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(lambdaestim_s)[,1]))+
-  # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
-  labs(fill = "l", x = "", y = "", title = "intensité normalisée estimée sans effort")
+wrap_plots(
+  # Intensité normalisée fittée avec effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(lambdaestim)[,1]))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
+    labs(fill = "l", x = "", y = "", title = "intensité normalisée estimée avec effort"),
+  
+  # Vraie intensité normalisée
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
+    labs(fill = "l", x = "", y = "", title = "vraie intensité normalisée"),
+  
+  # Intensité normalisée fittée sans effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(lambdaestim_s)[,1]))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
+    labs(fill = "l", x = "", y = "", title = "intensité normalisée estimée sans effort")
+)
 
 dsl_min <- min(scale(dat$lambda)[,1]-scale(lambdaestim)[,1], scale(dat$lambda)[,1]-scale(lambdaestim_s)[,1])
 dsl_max <- max(scale(dat$lambda)[,1]-scale(lambdaestim)[,1], scale(dat$lambda)[,1]-scale(lambdaestim_s)[,1])
 
-# Différence entre vraie et avec effort
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]-scale(lambdaestim)[,1]))+
-  # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(dsl_min, dsl_max)) +
-  labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités normalisées (vraie - avec effort)")
-
-# Différence entre vraie et sans effort
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]-scale(lambdaestim_s)[,1]))+
-  # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(dsl_min, dsl_max)) +
-  labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités normalisées (vraie - sans effort)")
+wrap_plots(
+  # Différence entre vraie et avec effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]-scale(lambdaestim)[,1]))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(dsl_min, dsl_max)) +
+    labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités normalisées (vraie - avec effort)"),
+  
+  # Différence entre vraie et sans effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]-scale(lambdaestim_s)[,1]))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(dsl_min, dsl_max)) +
+    labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités normalisées (vraie - sans effort)")
+)
 
 # Taux d'erreur avec effort
 summary(abs(
@@ -468,19 +483,21 @@ bsd <- apply(res_b, 2, sd)
 b_min <- min(dat$b, bestim)
 b_max <- max(dat$b, bestim)
 
-# Effort fitté
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = bestim))+
-  # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(b_min, b_max)) +
-  labs(fill = "b", x = "", y = "", title = "effort fitté")
-
-# Vrai effort
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b))+
-  # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(b_min, b_max)) +
-  labs(fill = "b", x = "", y = "", title = "vrai effort")
+wrap_plots(
+  # Effort fitté
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = bestim))+
+    # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(b_min, b_max)) +
+    labs(fill = "b", x = "", y = "", title = "effort fitté"),
+  
+  # Vrai effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b))+
+    # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(b_min, b_max)) +
+    labs(fill = "b", x = "", y = "", title = "vrai effort")
+)
 
 # Différence
 ggplot()+
@@ -534,19 +551,21 @@ summary(abs(
 lb_min <- min(dat$lambda*dat$b, lambdaestim*bestim)
 lb_max <- max(dat$lambda*dat$b, lambdaestim*bestim)
 
-# intensité amincie fittée
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = bestim*lambdaestim))+
-  # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(lb_min, lb_max)) +
-  labs(fill = "lb", x = "", y = "", title = "intensité amincie fittée")
-
-# Vraie intensité amincie
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b*dat$lambda))+
-  # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c(begin = 0, end = 1, limits = c(lb_min, lb_max)) +
-  labs(fill = "lb", x = "", y = "", title = "vraie intensité amincie")
+wrap_plots(
+  # intensité amincie fittée
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = bestim*lambdaestim))+
+    # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(lb_min, lb_max)) +
+    labs(fill = "lb", x = "", y = "", title = "intensité amincie fittée"),
+  
+  # Vraie intensité amincie
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b*dat$lambda))+
+    # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(lb_min, lb_max)) +
+    labs(fill = "lb", x = "", y = "", title = "vraie intensité amincie")
+)
 
 # Différence
 ggplot()+
@@ -563,34 +582,3 @@ summary(abs(
 
 
 
-
-# # test simu...
-# pp <- rpoispp(function(x,y) {100 * exp(-3*x)}, 100)
-# plot(pp)
-# 
-# data_test <- expand.grid(x = seq(0,1,0.01), y = seq(0,1,0.01))
-# data_test$z <- with(data_test, 100 * exp(-3*x))
-# 
-# ggplot(data_test, aes(x = x, y = y, fill = z)) +
-#   geom_raster(interpolate = TRUE) +
-#   scale_fill_viridis_c() +
-#   geom_point(data = as.data.frame(pp), aes(x = x, y = y), inherit.aes = FALSE, col = "white") 
-# 
-# 
-# Z <- as.im(function(x,y){sqrt(x+y)/10}, owin(xrange = c(0,100), yrange = c(0,100)), dimyx = 100)
-# # pp <- rpoispp(Z)
-# # plot(pp)
-# plot(Z)
-# # M <- as.matrix.im(Z)
-# 
-# W <- as.im(function(x,y){0.5*exp(-(y-50)^2/400)}, owin(xrange = c(0,100), yrange = c(0,100)), dimyx = 100)
-# plot(W)
-# plot(Z*W)
-# pp <- rpoispp(Z*W)
-# plot(pp)
-# 
-# ggplot(as.data.frame(Z*W), aes(x = x, y = y, fill = value)) +
-#   geom_raster(interpolate = FALSE) +
-#   scale_fill_viridis_c() +
-#   geom_point(data = as.data.frame(pp), aes(x = x, y = y), inherit.aes = FALSE, col = "white", cex = 0.2) 
-#   
