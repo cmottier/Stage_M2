@@ -5,9 +5,7 @@
 # Librairies utiles ------------------------------------------------------------
 library(ggplot2)
 library(tidyverse)
-# library(sf)
 library(spatstat)
-library(AHMbook)
 library(nimble)
 library(MCMCvis)
 library(plot.matrix)
@@ -98,258 +96,152 @@ ni <- nburn + 30000
 nt <- 1
 nt2 <- 100
 
+inits <- function() {
+  list(beta = rnorm(3, 0, 1), alpha = rnorm(2, 0, 1))
+}
+
 # Coefficients choisis ---------------------------------------------------------
 
 alpha <- c(-2, 1) # effort : b = plogis(...+...*w)
-beta <- c(-3, -1, 2) # intensité : l = exp(...+...*x)
-
-# Simulation des observations --------------------------------------------------
-
-## Avec AHMbook #######################################
-
-# On utilise ici la variable d'environnement x et la variable 
-# d'effort w déterminées dans l'annexe de Koshkina
-
-set.seed(123)
-
-dat <- simDataDK(
-  sqrt.npix = 50, 
-  alpha = alpha, 
-  beta = beta, 
-  drop.out.prop.pb = 0, 
-  quadrat.size = 2,
-  # gamma = c(0, -1.5), 
-  # nquadrats = 250, 
-  # nsurveys = 0,
-  show.plot = FALSE
-) # donne x et w centrées reduites
-
-str(dat, 1)
-
-# Our landscape is inhabited by a total of ... individuals (dat$N.ipp)
-dat$N.ipp
-
-# of which ... are detected
-dat$N.det
-
-#Their locations represent our presence-only data: 
-# loc.det contains the coordinates 
-head(dat$loc.det) # Actual coordinates of points detected
-
-# and pixel.id.det the pixel ID for each detected point.
-head(dat$pixel.id.det) # Pixel ID of 302 points detected
-
-# le thinning est donc de :
-1-dat$N.det/dat$N.ipp
-
-# surface des cellules
-(logarea <- log(dat$s.area / dat$npix))
-
-# Plot
-ggplot() +
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$xcov))+
-  geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c() +
-  labs(fill = "x", x = "", y = "")
-
-# valeur de la variable d'effort h et observations
-ggplot()+
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$wcov))+
-  geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c() +
-  labs(fill = "w", x = "", y = "")
-
-# ou...
-# plot(dat$s)
-
-## Avec le package spatstat ########################################
-
-### Covariables aléatoires ############################
-dim <- 50
-
-X <- matrix(runif(dim*dim, -1, 1), nrow = dim)
-X <- (X-mean(X))/sd(X)
-X.im <- as.im(X, square(dim))
-# plot(X.im)
-
-X2 <- matrix(runif(dim*dim, -1, 1), nrow = dim)
-X2 <- (X2-mean(X2))/sd(X2)
-X2.im <- as.im(X2, square(dim))
-# plot(X.im)
-
-W <- matrix(rbeta(dim*dim, 1, 3), nrow = dim)
-W <- (W-mean(W))/sd(W)
-W.im <- as.im(W, square(dim))
-# plot(W.im)
-
-### Multinormales ####################################
-
-dim <- 50
-sigma <- matrix(c(1,0,0.95,0,1,0,0.95,0,1), nrow = 3, byrow = TRUE)
-
-covariables <- rmvnorm(dim^2, sigma = sigma)
-covariables <- apply(covariables, 2, function(x) {return((x-mean(x))/sd(x))})
-
-X <- matrix(covariables[,1], nrow = dim)
-X.im <- as.im(X, square(dim))
-
-X2 <- matrix(covariables[,2], nrow = dim)
-X2.im <- as.im(X2, square(dim))
-
-W <- matrix(covariables[,3], nrow = dim)
-W.im <- as.im(W, square(dim))
-
-### Covariables construites ##########################
-dim <- 50
-X.im <- as.im(function(x,y){sqrt(x+y)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
-X <- as.matrix.im(X.im)
-X <- (X-mean(X))/sd(X)
-X.im <- as.im(X, square(dim))
-
-X2.im <- as.im(function(x,y){sqrt(100-2*y)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
-X2 <- as.matrix.im(X2.im)
-X2 <- (X2-mean(X2))/sd(X2)
-X2.im <- as.im(X2, square(dim))
-
-# W.im <- as.im(function(x,y){sqrt(dim-x+dim-y)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
-W.im <- as.im(function(x,y){exp(-(y-dim/2)^2/50)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
-W <- as.matrix.im(W.im)
-W <- (W-mean(W))/sd(W)
-W.im <- as.im(W, square(dim))
+beta <- c(-3, 1, 2) # intensité : l = exp(...+...*x)
 
 
-### Construction de dat ##########################
 
-dat <- list()
-dat$npix <- dim*dim
-dat$s.loc <- as.data.frame(X.im)[,1:2]
-dat$xcov <- as.data.frame(X.im)$value
-dat$x2cov <- as.data.frame(X2.im)$value
-dat$wcov <- as.data.frame(W.im)$value
+# Simulation des observations avec spatstat ------------------------------------
 
-# aire des cellules
-area <- 1
-logarea <- log(area)
+## Multinormales ####################################
+# Fithian et al.
 
-# Valeurs de lambda et b 
-lambda_v <- as.im(area*exp(beta[1]+beta[2]*X+beta[3]*X2), square(dim))
-b_v <- as.im(plogis(alpha[1]+alpha[2]*W), square(dim))
+simu_data <- function(dim, sigma) {
+  # simulation des covariables centrées réduites
+  covariables <- rmvnorm(dim^2, sigma = sigma)
+  covariables <- apply(covariables, 2, function(x) {
+    return((x - mean(x)) / sd(x))
+  })
+  
+  # format qui va bien
+  X <- matrix(covariables[, 1], nrow = dim)
+  X.im <- as.im(X, square(dim))
+  
+  X2 <- matrix(covariables[, 2], nrow = dim)
+  X2.im <- as.im(X2, square(dim))
+  
+  W <- matrix(covariables[, 3], nrow = dim)
+  W.im <- as.im(W, square(dim))
+  
+  # aire des cellules
+  area <- 1
+  logarea <- log(area)
+  
+  # Objet dat contenant toutes les informations nécessaires
+  dat <- list()
+  dat$npix <- dim * dim # nombre de pixels
+  dat$logarea <- logarea
+  dat$s.loc <- as.data.frame(X.im)[, 1:2] 
+  dat$xcov <- as.data.frame(X.im)$value
+  dat$x2cov <- as.data.frame(X2.im)$value
+  dat$wcov <- as.data.frame(W.im)$value
+  dat$lambda <- exp(logarea + beta[1] + beta[2] * dat$xcov + beta[3] * dat$x2cov)
+  dat$b <- plogis(alpha[1] + alpha[2] * dat$wcov)
+  
+  # simulation de l'IPPP
+  pp <- rpoispp(as.im(matrix(dat$lambda*dat$b, nrow = dim), square(dim)))
+  
+  # nombre d'observations
+  dat$N.det <- pp$n 
+  
+  # localisation des observations
+  dat$loc.det <- data.frame(x = pp$x, y = pp$y) 
+  
+  # identifiant des cellules des observations
+  dat$pixel.id.det <- NULL
+  for (i in 1:dat$N.det) {
+    dat$pixel.id.det[i] <- which(dat$s.loc[1] == floor(pp$x[i]) + 0.5 &
+                                   dat$s.loc[2] == floor(pp$y[i]) + 0.5)
+  }
 
-# simulation de l'IPPP
-pp <- rpoispp(b_v*lambda_v)
-
-(dat$N.det <- pp$n)
-dat$loc.det <- data.frame(x = pp$x, y = pp$y)
-
-# identifiant des cellules des observations
-dat$pixel.id.det <- NULL
-for (i in 1:dat$N.det) {
-  dat$pixel.id.det[i] <- which(dat$s.loc[1] == floor(pp$x[i]) + 0.5 & dat$s.loc[2] == floor(pp$y[i]) + 0.5)
+  return(dat)
 }
 
+## tests ############
+dim <- 50
+sigma <- matrix(c(1,0,0.95,0,1,0,0.95,0,1), nrow = 3, byrow = TRUE)
+dat <- simu_data(dim, sigma)
 
-## Intensités et efforts ###############################
-
-dat$lambda <- exp(logarea+beta[1]+beta[2]*dat$xcov+beta[3]*dat$x2cov)
-dat$b <- plogis(alpha[1]+alpha[2]*dat$wcov)
-
-# Illustration des données simulées --------------------------------------------
-
-# choix de la variable : 
-var = "xcov"
-var = "wcov"
-var = "lambda"
-var = "b"
-
-ggplot() +
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat[[var]]))+
-  geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c() +
-  labs(x = "", y = "", fill =var)
-
-fill = dat$b*dat$lambda
-
-ggplot() +
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = fill))+
-  geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c() +
-  labs(x = "", y = "", fill = "lambda*b")
-
+ndet <- NULL
+for (gamma in seq(-1,1,0.1)) {
+  sigma <- matrix(c(1,0,gamma,0,1,0,gamma,0,1), nrow = 3, byrow = TRUE)
+  dat <- simu_data(dim, sigma)
+  ndet <- append(ndet, dat$N.det)
+}
 
 # Estimation -------------------------------------------------------------------
 
-data <- list(
-  log_area = rep(logarea, dat$npix),
-  x = scale(dat$xcov)[, 1],
-  x2 = scale(dat$x2cov)[, 1],
-  w = scale(dat$wcov)[, 1],
-  ones = rep(1, dat$N.det)
-)
-
-constants <- list(
-  npixel = dat$npix,
-  nobs = dat$N.det,
-  CONSTANT = 50000,
-  obs_pixel = dat$pixel.id.det
-) 
-
-inits <- function(){
-  list(
-    beta = rnorm(3, 0, 1),
-    alpha = rnorm(2, 0, 1)
+estim <- function(dat) {
+  data <- list(
+    log_area = rep(dat$logarea, dat$npix),
+    x = dat$xcov,
+    x2 = dat$x2cov,
+    w = dat$wcov,
+    ones = rep(1, dat$N.det)
   )
+  
+  constants <- list(
+    npixel = dat$npix,
+    nobs = dat$N.det,
+    CONSTANT = 50000,
+    obs_pixel = dat$pixel.id.det
+  )
+  
+  for (type in c("avec", "sans")) {
+    if (type == "avec") {
+      code <- code_avec
+      monitors <- c("beta", "alpha")
+      monitors2 <- c("lambda", "b", "p")
+    } else {
+      code <- code_sans
+      monitors <- c("beta")
+      monitors2 <- c("lambda", "p")
+    }
+    
+    model <- nimbleModel(
+      code = code,
+      constants = constants,
+      data = data,
+      inits = inits()
+    )
+    
+    Cmodel <- compileNimble(model)
+    
+    conf <- configureMCMC(
+      Cmodel,
+      monitors = monitors,
+      monitors2 = monitors2,
+      thin = nt,
+      thin2 = nt2
+    )
+    
+    Rmcmc <- buildMCMC(conf)
+    Cmcmc <- compileNimble(Rmcmc, project = Cmodel)
+    
+    out[[type]] <- runMCMC(
+        Cmcmc,
+        niter = ni,
+        nburnin = nburn,
+        nchains = nc
+        # WAIC = TRUE
+      )
+  }
+  
+  return(out)
 }
 
-## Avec effort ########################################
-
-model_avec <- nimbleModel(
-  code = code_avec,
-  constants = constants,
-  data = data,
-  inits = inits()
-)
-
-Cmodel_avec <- compileNimble(model_avec)
-
-conf_avec <- configureMCMC(Cmodel_avec, monitors = c("beta", "alpha"),
-                        monitors2 = c("lambda", "b", "p"), thin = nt, thin2 = nt2)
-
-Rmcmc_avec <- buildMCMC(conf_avec)
-Cmcmc_avec <- compileNimble(Rmcmc_avec, project = Cmodel_avec)
-
-out <- runMCMC(
-  Cmcmc_avec,
-  niter = ni,
-  nburnin = nburn,
-  nchains = nc
-  # WAIC = TRUE
-)
-
-## Sans effort ########################################
-
-model_s <- nimbleModel(
-  code = code_sans,
-  constants = constants,
-  data = data,
-  inits = inits()
-)
-
-Cmodel_s <- compileNimble(model_s)
-
-conf_s <- configureMCMC(Cmodel_s, monitors = c("beta"),
-                        monitors2 = c("lambda", "p"), thin = nt, thin2 = nt2)
-
-Rmcmc_s <- buildMCMC(conf_s)
-Cmcmc_s <- compileNimble(Rmcmc_s, project = Cmodel_s)
-
-out_s <- runMCMC(
-  Cmcmc_s,
-  niter = ni,
-  nburnin = nburn,
-  nchains = nc
-  # WAIC = TRUE
-)
-
+# test
+dim <- 50
+sigma <- matrix(c(1,0,0.95,0,1,0,0.95,0,1), nrow = 3, byrow = TRUE)
+dat <- simu_data(dim, sigma)
+res <- estim(dat)
+MCMCsummary(res$avec$samples, param=c("alpha", "beta"))
 
 # Qualité des ajustements ------------------------------------------------------
 
