@@ -96,7 +96,7 @@ nt2 <- 100
 # Coefficients choisis ---------------------------------------------------------
 
 alpha <- c(-2, 1) # effort : b = plogis(...+...*w)
-beta <- c(-1, 1) # intensité : l = exp(...+...*x)
+beta <- c(6, 1) # intensité : l = exp(...+...*x)
 
 # Simulation des observations --------------------------------------------------
 
@@ -581,4 +581,71 @@ summary(abs(
 ))
 
 
+# Test matrice de Fisher -------------------------------------------------------
 
+alpha_0 <- seq(-5, 5, by = 0.05)
+alpha_1 <- -1 
+beta <- c(log(8000), 0.5) 
+
+dat <- simDataDK(
+  sqrt.npix = 50, 
+  alpha = c(0, alpha_1), 
+  beta = beta, 
+  drop.out.prop.pb = 0, 
+  quadrat.size = 2,
+  show.plot = FALSE
+) # donne x et w centrées reduites
+
+# surface des cellules
+logarea <- log(dat$s.area / dat$npix)
+
+rcon <- NULL
+verif <- NULL
+for (a in alpha_0) { 
+  
+  dat$lambda <- exp(logarea+beta[1]+beta[2]*dat$xcov)
+  dat$b <- plogis(a+alpha_1*dat$wcov)
+  
+  
+  partial_beta <- matrix(
+    data = c(
+      sum(dat$lambda*dat$b),
+      sum(dat$xcov*dat$lambda*dat$b),
+      sum(dat$xcov*dat$lambda*dat$b),
+      sum(dat$xcov^2*dat$lambda*dat$b)
+    ),
+    nrow = 2, 
+    byrow = TRUE
+  )
+  
+  partial_beta_alpha <- matrix(
+    data = c(
+      sum(dat$lambda*dat$b*(1-dat$b)),
+      sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)),
+      sum(dat$xcov*dat$lambda*dat$b*(1-dat$b)),
+      sum(dat$xcov*dat$wcov*dat$lambda*dat$b*(1-dat$b))
+    ),
+    nrow = 2, 
+    byrow = TRUE
+  )
+  
+  partial_alpha <- matrix(
+    data = c(
+      sum(dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$lambda*dat$b^2*(1-dat$b)),
+      sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov*dat$lambda*dat$b^2*(1-dat$b)),
+      sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov*dat$lambda*dat$b^2*(1-dat$b)),
+      sum(dat$wcov^2*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov^2*dat$lambda*dat$b^2*(1-dat$b))
+    ),
+    nrow = 2, 
+    byrow = TRUE
+  )
+  
+  I <- rbind(cbind(partial_beta, partial_beta_alpha),
+             cbind(t(partial_beta_alpha), partial_alpha))
+  
+  verif <- cbind(verif, sum(eigen(I)$values >0) == 4)
+  rcon <- cbind(rcon, eigen(I)$values[4]/ eigen(I)$values[1])
+}
+
+table(verif)
+lines(alpha_0, rcon, type = "l")
