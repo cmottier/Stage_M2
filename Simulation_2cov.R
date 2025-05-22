@@ -10,7 +10,7 @@ library(nimble)
 library(MCMCvis)
 # library(plot.matrix)
 # library(raster)
-# library(patchwork)
+library(patchwork)
 library(mvtnorm)
 
 # Codes des modèles avec/sans effort -------------------------------------------
@@ -100,17 +100,11 @@ inits <- function() {
   list(beta = rnorm(3, 0, 1), alpha = rnorm(2, 0, 1))
 }
 
-# Coefficients choisis ---------------------------------------------------------
-
-alpha <- c(-2, 1) # effort : b = plogis(...+...*w)
-beta <- c(-3, 1, 2) # intensité : l = exp(...+...*x)
-
 
 
 # Simulation des observations avec spatstat ------------------------------------
 
-## Multinormales ####################################
-# Fithian et al.
+## Avec une loi multinormale (Fithian et al) ############################
 
 simu_data <- function(dim, sigma) {
   # simulation des covariables centrées réduites
@@ -163,18 +157,117 @@ simu_data <- function(dim, sigma) {
   return(dat)
 }
 
-## tests ############
-# dim <- 50
-# sigma <- matrix(c(1,0,0.95,0,1,0,0.95,0,1), nrow = 3, byrow = TRUE)
-# dat <- simu_data(dim, sigma)
-# 
-# ndet <- NULL
-# for (gamma in seq(-1,1,0.1)) {
-#   sigma <- matrix(c(1,0,gamma,0,1,0,gamma,0,1), nrow = 3, byrow = TRUE)
-#   dat <- simu_data(dim, sigma)
-#   ndet <- append(ndet, dat$N.det)
-# }
-# ndet
+## Avec des fonctions construites ####################################
+
+dim <- 50
+X.im <- as.im(function(x,y){sqrt(x+y)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
+X <- as.matrix.im(X.im)
+X <- (X-mean(X))/sd(X)
+X.im <- as.im(X, square(dim))
+
+X2.im <- as.im(function(x,y){sqrt(100-2*y)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
+X2 <- as.matrix.im(X2.im)
+X2 <- (X2-mean(X2))/sd(X2)
+X2.im <- as.im(X2, square(dim))
+
+W.im <- as.im(function(x,y){exp(-(y-dim/2)^2/50)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
+W <- as.matrix.im(W.im)
+W <- (W-mean(W))/sd(W)
+W.im <- as.im(W, square(dim))
+
+dat <- list()
+dat$npix <- dim*dim
+dat$s.loc <- as.data.frame(X.im)[,1:2]
+dat$xcov <- as.data.frame(X.im)$value
+dat$x2cov <- as.data.frame(X2.im)$value
+dat$wcov <- as.data.frame(W.im)$value
+
+# aire des cellules
+area <- 1
+logarea <- log(area)
+
+# Valeurs de lambda et b 
+lambda_v <- as.im(area*exp(beta[1]+beta[2]*X+beta[3]*X2), square(dim))
+b_v <- as.im(plogis(alpha[1]+alpha[2]*W), square(dim))
+
+# simulation de l'IPPP
+pp <- rpoispp(b_v*lambda_v)
+
+(dat$N.det <- pp$n)
+dat$loc.det <- data.frame(x = pp$x, y = pp$y)
+
+# identifiant des cellules des observations
+dat$pixel.id.det <- NULL
+for (i in 1:dat$N.det) {
+  dat$pixel.id.det[i] <- which(dat$s.loc[1] == floor(pp$x[i]) + 0.5 & dat$s.loc[2] == floor(pp$y[i]) + 0.5)
+}
+
+# intensité et effort
+dat$lambda <- exp(logarea+beta[1]+beta[2]*dat$xcov+beta[3]*dat$x2cov)
+dat$b <- plogis(alpha[1]+alpha[2]*dat$wcov)
+
+
+
+# Identifiabilité : matrice de Fisher ------------------------------------------
+
+identif <- function(dat) {
+  X <- cbind(1, dat$xcov, dat$x2cov)
+  W <- cbind(1, dat$wcov)
+  
+  Hmat = matrix(nrow=5, ncol=5)
+  
+  #  beta partials
+  for (i in 1:3) {
+    for (j in 1:i) {
+      Hmat[i,j] = sum(X[,i] * X[,j] * dat$lambda * dat$b)
+      Hmat[j,i] = Hmat[i,j]
+    }
+  }
+  
+  # alpha partials
+  for (i in 1:2) {
+    for (j in 1:i) {
+      Hmat[3+i, 3+j] = sum(W[,i] * W[,j] * dat$lambda * dat$b * ((1-dat$b)^3) * (1 - exp(2 * W %*% alpha)) ) + sum(W[,i] * W[,j] * dat$b * (1-dat$b))
+      Hmat[3+j, 3+i] = Hmat[3+i, 3+j]
+    }
+  }
+  
+  # alpha-beta partials
+  for (i in 1:2) {
+    for (j in 1:3) {
+      Hmat[3+i, j] = sum(X[,j] * W[,i] * dat$lambda * dat$b * (1-dat$b))
+      Hmat[j, 3+i] = Hmat[3+i, j]
+    }
+  }
+  
+  return(min(abs(eigen(Hmat)$values))/ max(abs(eigen(Hmat)$values)))
+} 
+
+
+
+# Illustrations des données simulées -------------------------------------------
+
+var = "xcov"
+var = "x2cov"
+var = "wcov"
+var = "lambda"
+var = "b"
+
+ggplot() +
+  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat[[var]]))+
+  geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+  scale_fill_viridis_c() +
+  labs(x = "", y = "", fill =var)
+
+fill = dat$b*dat$lambda
+
+ggplot() +
+  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = fill))+
+  geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+  scale_fill_viridis_c() +
+  labs(x = "", y = "", fill = "lambda*b")
+
+
 
 # Estimation -------------------------------------------------------------------
 
@@ -239,17 +332,264 @@ estim <- function(dat) {
   return(out)
 }
 
-# # test
+
+# Extraction des éléments utiles -----------------------------------------------
+
+resume <- function(out) {
+  res <- NULL 
+  out_a <- rbind(out$avec$samples2$chain1, out$avec$samples2$chain2)
+  out_s <- rbind(out$sans$samples2$chain1, out$sans$samples2$chain2)
+  
+  # lambdas fittés
+  mask <- str_detect(colnames(out_a), "lambda")
+  res_lambda_a <- out_a[,mask]
+  res$lambda_avec  <- apply(res_lambda_a, 2, median)
+  
+  mask <- str_detect(colnames(out_s), "lambda")
+  res_lambda_s <- out_s[,mask]
+  res$lambda_sans<- apply(res_lambda_s, 2, median)
+  
+  # effort fitté
+  mask <- str_detect(colnames(out_a), "b[^ed]")
+  res_b_a <- out_a[,mask]
+  res$b_avec <- apply(res_b_a, 2, median)
+  
+  # coeff fittés
+  res$coeff_avec <- MCMCsummary(out$avec$samples, probs = c(0.5), Rhat = FALSE, n.eff = FALSE)[,3]
+  res$coeff_sans <- MCMCsummary(out$sans$samples, probs = c(0.5), Rhat = FALSE, n.eff = FALSE)[,3]
+  
+  return(res)
+}
+
+# # tests
 # dim <- 50
-# sigma <- matrix(c(1,0,0.95,0,1,0,0.95,0,1), nrow = 3, byrow = TRUE)
+# alpha <- c(-3, 1) # effort : b = plogis(...+...*w)
+# beta <- c(-2, 1, 1) # intensité : l = exp(...+...*x)
+# sigma <- matrix(c(1,0,-0.3,0,1,0,-0.3,0,1), nrow = 3, byrow = TRUE)
 # dat <- simu_data(dim, sigma)
-# res <- estim(dat)
-# MCMCsummary(res$avec$samples, param=c("alpha", "beta"))
+# dat$N.det
+# identif(dat)
+# out <- estim(dat)
+# res <- resume(out)
+
+# Qualité des ajustements ------------------------------------------------------
+
+## MCMC ##################
+
+# avec effort
+MCMCsummary(out$avec$samples, param=c("alpha", "beta"))
+MCMCtrace(out$avec$samples, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
+MCMCplot(out$avec$samples)
+
+# sans effort
+MCMCsummary(out$sans$samples, param=c("beta"))
+MCMCtrace(out$sans$samples, pdf = FALSE, ind = TRUE, params = c("beta"))
+MCMCplot(out$sans$samples)
+
+
+## Intensité ################
+
+l_min <- min(dat$lambda, res$lambda_avec, res$lambda_sans)
+l_max <- max(dat$lambda, res$lambda_avec, res$lambda_sans)
+
+wrap_plots(
+  # Intensité fittée avec effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = res$lambda_avec))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
+    labs(fill = "l", x = "", y = "", title = "intensité fittée avec effort"),
+  
+  # Vraie intensité
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
+    labs(fill = "l", x = "", y = "", title = "vraie intensité"),
+  
+  # Intensité fittée sans effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = res$lambda_sans))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
+    labs(fill = "l", x = "", y = "", title = "intensité fittée sans effort")
+)
+
+# Différence entre vraie et avec effort
+
+dl_min <- min(dat$lambda-res$lambda_avec, dat$lambda-res$lambda_sans)
+dl_max <- max(dat$lambda-res$lambda_avec, dat$lambda-res$lambda_sans)
+
+wrap_plots(
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda-res$lambda_avec))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(dl_min, dl_max)) +
+    labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités (vraie - estimée avec effort)"),
+  
+  # Différence entre vraie et sans effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda-res$lambda_sans))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(dl_min, dl_max)) +
+    labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités (vraie - estimée sans effort)")
+)
+
+# Taux d'erreur entre vraie et avec effort
+summary(abs(
+  (dat$lambda - res$lambda_avec) / 
+    dat$lambda
+))
+
+# Taux d'erreur entre vraie et sans effort
+summary(abs(
+  (dat$lambda - res$lambda_sans) / 
+    dat$lambda
+))
+
+# Erreur quadratique
+mean((dat$lambda - res$lambda_avec)^2)
+mean((dat$lambda - res$lambda_sans)^2)
+
+
+## Intensités normalisées ###############
+
+sl_min <- min(scale(dat$lambda)[,1], scale(res$lambda_avec)[,1], scale(res$lambda_sans)[,1])
+sl_max <- max(scale(dat$lambda)[,1], scale(res$lambda_avec)[,1], scale(res$lambda_sans)[,1])
+
+wrap_plots(
+  # Intensité normalisée fittée avec effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(res$lambda_avec)[,1]))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
+    labs(fill = "l", x = "", y = "", title = "intensité normalisée estimée avec effort"),
+  
+  # Vraie intensité normalisée
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
+    labs(fill = "l", x = "", y = "", title = "vraie intensité normalisée"),
+  
+  # Intensité normalisée fittée sans effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(res$lambda_sans)[,1]))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
+    labs(fill = "l", x = "", y = "", title = "intensité normalisée estimée sans effort")
+)
+
+dsl_min <- min(scale(dat$lambda)[,1]-scale(res$lambda_avec)[,1], scale(dat$lambda)[,1]-scale(res$lambda_sans)[,1])
+dsl_max <- max(scale(dat$lambda)[,1]-scale(res$lambda_avec)[,1], scale(dat$lambda)[,1]-scale(res$lambda_sans)[,1])
+
+wrap_plots(
+  # Différence entre vraie et avec effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]-scale(res$lambda_avec)[,1]))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(dsl_min, dsl_max)) +
+    labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités normalisées (vraie - avec effort)"),
+  
+  # Différence entre vraie et sans effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]-scale(res$lambda_sans)[,1]))+
+    # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(dsl_min, dsl_max)) +
+    labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités normalisées (vraie - sans effort)")
+)
+
+# Taux d'erreur avec effort
+summary(abs(
+  (scale(dat$lambda)[, 1] - scale(res$lambda_avec)[, 1]) 
+  / scale(dat$lambda)[, 1]
+))
+
+# Taux d'erreur sans effort
+summary(abs(
+  (scale(dat$lambda)[, 1] - scale(res$lambda_sans)[, 1]) 
+  / scale(dat$lambda)[, 1]
+))
+
+# erreur quadratique
+mean((scale(dat$lambda)[, 1] - scale(res$lambda_avec)[, 1])^2)
+mean((scale(dat$lambda)[, 1] - scale(res$lambda_sans)[, 1])^2)
+
+## Effort ########################
+
+b_min <- min(dat$b, res$b)
+b_max <- max(dat$b, res$b)
+
+wrap_plots(
+  # Effort fitté
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = res$b))+
+    # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(b_min, b_max)) +
+    labs(fill = "b", x = "", y = "", title = "effort fitté"),
+  
+  # Vrai effort
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b))+
+    # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(b_min, b_max)) +
+    labs(fill = "b", x = "", y = "", title = "vrai effort")
+)
+
+# Différence
+ggplot()+
+  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b-res$b))+
+  # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+  scale_fill_viridis_c(begin = 0, end = 1) +
+  labs(fill = "bv-bf", x = "", y = "", title = "différence d'effort")
+
+# Taux d'erreur
+summary(abs(
+  (dat$b-res$b) / 
+    dat$b
+))
+
+
+
+## Intensité amincie #####################
+
+lb_min <- min(dat$lambda*dat$b, res$lambda_avec*res$b)
+lb_max <- max(dat$lambda*dat$b, res$lambda_avec*res$b)
+
+wrap_plots(
+  # intensité amincie fittée
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = res$b*res$lambda_avec))+
+    # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(lb_min, lb_max)) +
+    labs(fill = "lb", x = "", y = "", title = "intensité amincie fittée"),
+  
+  # Vraie intensité amincie
+  ggplot()+
+    geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b*dat$lambda))+
+    # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+    scale_fill_viridis_c(begin = 0, end = 1, limits = c(lb_min, lb_max)) +
+    labs(fill = "lb", x = "", y = "", title = "vraie intensité amincie")
+)
+
+# Différence
+ggplot()+
+  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b*dat$lambda-res$b*res$lambda_avec))+
+  # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+  scale_fill_viridis_c(begin = 0, end = 1) +
+  labs(fill = "lbv-lbf", x = "", y = "", title = "différence d'intensités amincies")
+
+# Résumé du taux d'erreur
+summary(abs(
+  (dat$b*dat$lambda-res$b*res$lambda_avec) / 
+    (dat$b*dat$lambda)
+))
 
 
 
 # Evolution de la corrélation --------------------------------------------------
 
+## Construction des données ##################
 res <- NULL
 res$coeff <- c(alpha, beta)
 res$gamma <- NULL
@@ -313,348 +653,66 @@ for (g in sequence) {
 }
 
 
-# Qualité des ajustements ------------------------------------------------------
+## Coefficients fittés #############################
+
+df_avec <- as.data.frame(t(res$coeff_avec))
+colnames(df_avec) <- c("alpha_1", "alpha_2", "beta_1", "beta_2", "beta_3")
+df_avec <- pivot_longer(df_avec, cols = colnames(df_avec), names_to = "coeff", values_to = "valeur")
+
+df_sans <- as.data.frame(t(res$coeff_sans))
+colnames(df_sans) <- c( "beta_1", "beta_2", "beta_3")
+df_sans <- pivot_longer(df_sans, cols = colnames(df_sans), names_to = "coeff", values_to = "valeur")
 
 ggplot() +
-  geom_line(aes(x = res$g, y = res$coeff_avec[3,])) +
-  geom_line(aes(x = res$g, y = res$coeff_sans[1,]), col = "red") 
-# 
-# ## MCMC ##################
-# 
-# alpha
-# beta
-# 
-# # avec effort
-# MCMCsummary(out$samples, param=c("alpha", "beta"))
-# MCMCtrace(out$samples, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
-# MCMCplot(out$samples)
-# 
-# # sans effort
-# MCMCsummary(out_s$samples, param=c("beta"))
-# MCMCtrace(out_s$samples, pdf = FALSE, ind = TRUE, params = c("beta"))
-# MCMCplot(out_s$samples)
-# 
-# 
-# ## Intensité ################
-# 
-# res <- rbind(out$samples2$chain1, out$samples2$chain2)
-# res_s <- rbind(out_s$samples2$chain1, out_s$samples2$chain2)
-# 
-# # extraction des intensités (médiane)
-# 
-# # avec effort
-# mask <- str_detect(colnames(res), "lambda")
-# res_lambda <- res[,mask]
-# lambdaestim <- apply(res_lambda, 2, median)
-# lambdasd <- apply(res_lambda, 2, sd)
-# 
-# # sans effort
-# mask <- str_detect(colnames(res_s), "lambda")
-# res_s_lambda <- res_s[,mask]
-# lambdaestim_s <- apply(res_s_lambda, 2, median)
-# lambdasd_s <- apply(res_s_lambda, 2, sd)
-# 
-# l_min <- min(dat$lambda, lambdaestim, lambdaestim_s)
-# l_max <- max(dat$lambda, lambdaestim, lambdaestim_s)
-# 
-# wrap_plots(
-#   # Intensité fittée avec effort
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = lambdaestim))+
-#     # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
-#     labs(fill = "l", x = "", y = "", title = "intensité fittée avec effort"),
-#   
-#   # Vraie intensité
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda))+
-#     # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
-#     labs(fill = "l", x = "", y = "", title = "vraie intensité"),
-#   
-#   # Intensité fittée sans effort
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = lambdaestim_s))+
-#     # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(l_min, l_max)) +
-#     labs(fill = "l", x = "", y = "", title = "intensité fittée sans effort")
-# )
-# 
-# # Différence entre vraie et avec effort
-# 
-# dl_min <- min(dat$lambda-lambdaestim, dat$lambda-lambdaestim_s)
-# dl_max <- max(dat$lambda-lambdaestim, dat$lambda-lambdaestim_s)
-# 
-# wrap_plots(
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda-lambdaestim))+
-#     # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(dl_min, dl_max)) +
-#     labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités (vraie - estimée avec effort)"),
-#   
-#   # Différence entre vraie et sans effort
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$lambda-lambdaestim_s))+
-#     # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(dl_min, dl_max)) +
-#     labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités (vraie - estimée sans effort)")
-# )
-# 
-# # Taux d'erreur entre vraie et avec effort
-# summary(abs(
-#   (dat$lambda - lambdaestim) / 
-#     dat$lambda
-# ))
-# 
-# # Taux d'erreur entre vraie et sans effort
-# summary(abs(
-#   (dat$lambda - lambdaestim_s) / 
-#     dat$lambda
-# ))
-# 
-# # Erreur quadratique
-# mean((dat$lambda - lambdaestim)^2)
-# mean((dat$lambda - lambdaestim_s)^2)
-# 
-# 
-# ## Intensités normalisées ###############
-# 
-# sl_min <- min(scale(dat$lambda)[,1], scale(lambdaestim)[,1], scale(lambdaestim_s)[,1])
-# sl_max <- max(scale(dat$lambda)[,1], scale(lambdaestim)[,1], scale(lambdaestim_s)[,1])
-# 
-# wrap_plots(
-#   # Intensité normalisée fittée avec effort
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(lambdaestim)[,1]))+
-#     # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
-#     labs(fill = "l", x = "", y = "", title = "intensité normalisée estimée avec effort"),
-#   
-#   # Vraie intensité normalisée
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]))+
-#     # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
-#     labs(fill = "l", x = "", y = "", title = "vraie intensité normalisée"),
-#   
-#   # Intensité normalisée fittée sans effort
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(lambdaestim_s)[,1]))+
-#     # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(sl_min, sl_max)) +
-#     labs(fill = "l", x = "", y = "", title = "intensité normalisée estimée sans effort")
-# )
-# 
-# dsl_min <- min(scale(dat$lambda)[,1]-scale(lambdaestim)[,1], scale(dat$lambda)[,1]-scale(lambdaestim_s)[,1])
-# dsl_max <- max(scale(dat$lambda)[,1]-scale(lambdaestim)[,1], scale(dat$lambda)[,1]-scale(lambdaestim_s)[,1])
-# 
-# wrap_plots(
-#   # Différence entre vraie et avec effort
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]-scale(lambdaestim)[,1]))+
-#     # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(dsl_min, dsl_max)) +
-#     labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités normalisées (vraie - avec effort)"),
-#   
-#   # Différence entre vraie et sans effort
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$lambda)[,1]-scale(lambdaestim_s)[,1]))+
-#     # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(dsl_min, dsl_max)) +
-#     labs(fill = "lv-lf", x = "", y = "", title = "différence d'intensités normalisées (vraie - sans effort)")
-# )
-# 
-# # Taux d'erreur avec effort
-# summary(abs(
-#   (scale(dat$lambda)[, 1] - scale(lambdaestim)[, 1]) 
-#   / scale(dat$lambda)[, 1]
-# ))
-# 
-# # Taux d'erreur sans effort
-# summary(abs(
-#   (scale(dat$lambda)[, 1] - scale(lambdaestim_s)[, 1]) 
-#   / scale(dat$lambda)[, 1]
-# ))
-# 
-# # erreur quadratique
-# mean((scale(dat$lambda)[, 1] - scale(lambdaestim)[, 1])^2)
-# mean((scale(dat$lambda)[, 1] - scale(lambdaestim_s)[, 1])^2)
-# 
-# ## Effort ########################
-# 
-# # extraction des efforts (médiane)
-# mask <- str_detect(colnames(res), "b[^ed]")
-# res_b <- res[,mask]
-# bestim <- apply(res_b, 2, median)
-# bsd <- apply(res_b, 2, sd)
-# 
-# b_min <- min(dat$b, bestim)
-# b_max <- max(dat$b, bestim)
-# 
-# wrap_plots(
-#   # Effort fitté
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = bestim))+
-#     # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(b_min, b_max)) +
-#     labs(fill = "b", x = "", y = "", title = "effort fitté"),
-#   
-#   # Vrai effort
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b))+
-#     # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(b_min, b_max)) +
-#     labs(fill = "b", x = "", y = "", title = "vrai effort")
-# )
-# 
-# # Différence
-# ggplot()+
-#   geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b-bestim))+
-#   # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-#   scale_fill_viridis_c(begin = 0, end = 1) +
-#   labs(fill = "bv-bf", x = "", y = "", title = "différence d'effort")
-# 
-# # Taux d'erreur
-# summary(abs(
-#   (dat$b-bestim) / 
-#     dat$b
-# ))
-# 
-# 
-# ## Effort normalisé ################
-# 
-# sb_min <- min(scale(dat$b)[,1], scale(bestim)[,1])
-# sb_max <- max(scale(dat$b)[,1], scale(bestim)[,1])
-# 
-# # Effort fitté
-# ggplot()+
-#   geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(bestim)[,1]))+
-#   # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-#   scale_fill_viridis_c(begin = 0, end = 1, limits = c(sb_min, sb_max)) +
-#   labs(fill = "b", x = "", y = "", title = "effort fitté, normalisé")
-# 
-# # Vrai effort
-# ggplot()+
-#   geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$b)[,1]))+
-#   # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-#   scale_fill_viridis_c(begin = 0, end = 1, limits = c(sb_min, sb_max)) +
-#   labs(fill = "b", x = "", y = "", title = "vrai effort, normalisé" )
-# 
-# # Différence
-# ggplot()+
-#   geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = scale(dat$b)[,1]-scale(bestim)[,1]))+
-#   # geom_point(data = dat$loc.ipp, aes(x = x, y = y), col = "white") +
-#   scale_fill_viridis_c(begin = 0, end = 1) +
-#   labs(fill = "", x = "", y = "", title = "différence d'efforts normalisés")
-# 
-# # Résumé du taux d'erreur
-# summary(abs(
-#   (scale(dat$b)[,1]-scale(bestim)[,1]) 
-#   / scale(dat$b)[,1]
-# ))
-# 
-# 
-# ## Intensité amincie #####################
-# 
-# lb_min <- min(dat$lambda*dat$b, lambdaestim*bestim)
-# lb_max <- max(dat$lambda*dat$b, lambdaestim*bestim)
-# 
-# wrap_plots(
-#   # intensité amincie fittée
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = bestim*lambdaestim))+
-#     # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(lb_min, lb_max)) +
-#     labs(fill = "lb", x = "", y = "", title = "intensité amincie fittée"),
-#   
-#   # Vraie intensité amincie
-#   ggplot()+
-#     geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b*dat$lambda))+
-#     # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-#     scale_fill_viridis_c(begin = 0, end = 1, limits = c(lb_min, lb_max)) +
-#     labs(fill = "lb", x = "", y = "", title = "vraie intensité amincie")
-# )
-# 
-# # Différence
-# ggplot()+
-#   geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b*dat$lambda-bestim*lambdaestim))+
-#   # geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-#   scale_fill_viridis_c(begin = 0, end = 1) +
-#   labs(fill = "lbv-lbf", x = "", y = "", title = "différence d'intensités amincies")
-# 
-# # Résumé du taux d'erreur
-# summary(abs(
-#   (dat$b*dat$lambda-bestim*lambdaestim) / 
-#     (dat$b*dat$lambda)
-# ))
-# 
-# 
-# # Identifiabilité : matrice de Fisher ------------------------------------------
-# 
-# alpha_0 <- seq(-5, 5, by = 0.05)
-# alpha_1 <- alpha[2]
-# # beta <- c(log(8000), 0.5) 
-# # 
-# # dat <- simDataDK(
-# #   sqrt.npix = 100, 
-# #   alpha = c(0, alpha_1), 
-# #   beta = beta, 
-# #   drop.out.prop.pb = 0, 
-# #   quadrat.size = 2,
-# #   show.plot = FALSE
-# # ) # donne x et w centrées reduites
-# # 
-# # # surface des cellules
-# # logarea <- log(dat$s.area / dat$npix)
-# 
-# 
-# invcond <- NULL
-# verif <- NULL
-# for (a in alpha_0) { 
-#   
-#   dat$lambda <- exp(logarea+beta[1]+beta[2]*dat$xcov)
-#   dat$b <- plogis(a+alpha_1*dat$wcov)
-#   
-#   
-#   partial_beta <- matrix(
-#     data = c(
-#       sum(dat$lambda*dat$b),
-#       sum(dat$xcov*dat$lambda*dat$b),
-#       sum(dat$xcov*dat$lambda*dat$b),
-#       sum(dat$xcov^2*dat$lambda*dat$b)
-#     ),
-#     nrow = 2, 
-#     byrow = TRUE
-#   )
-#   
-#   partial_beta_alpha <- matrix(
-#     data = c(
-#       sum(dat$lambda*dat$b*(1-dat$b)),
-#       sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)),
-#       sum(dat$xcov*dat$lambda*dat$b*(1-dat$b)),
-#       sum(dat$xcov*dat$wcov*dat$lambda*dat$b*(1-dat$b))
-#     ),
-#     nrow = 2, 
-#     byrow = TRUE
-#   )
-#   
-#   partial_alpha <- matrix(
-#     data = c(
-#       sum(dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$lambda*dat$b^2*(1-dat$b)),
-#       sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov*dat$lambda*dat$b^2*(1-dat$b)),
-#       sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov*dat$lambda*dat$b^2*(1-dat$b)),
-#       sum(dat$wcov^2*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov^2*dat$lambda*dat$b^2*(1-dat$b))
-#     ),
-#     nrow = 2, 
-#     byrow = TRUE
-#   )
-#   
-#   I <- rbind(cbind(partial_beta, partial_beta_alpha),
-#              cbind(t(partial_beta_alpha), partial_alpha))
-#   
-#   verif <- append(verif, sum(eigen(I)$values >0) == 4)
-#   invcond <- append(invcond, eigen(I)$values[4]/ eigen(I)$values[1])
-# }
-# 
-# table(verif)
-# lines(alpha_0, invcond, type = "l", col = "blue")
+  geom_line(data = df_avec, aes(x =  rep(res$g, each = 5), y = valeur, color = coeff)) +
+  geom_line(data = df_sans, aes(x =  rep(res$g, each = 3), y = valeur, color = coeff), linetype = "dashed") +
+  geom_line(aes(x =  res$g, y = res$coeff_avec[1,]+res$coeff_avec[3,]))
+
+
+## Erreur d'intensité ################
+
+err_int_avec <- apply((res$lambda - res$lambda_avec)^2, 2, mean)
+err_int_sans <- apply((res$lambda - res$lambda_sans)^2, 2, mean)
+
+# Taux d'erreur 
+ggplot() +
+  geom_line(aes(x = res$g[2:21], y =  err_int_avec[2:21])) +# -1 : valeur qui explose !
+  geom_line(aes(x = res$g[2:21], y =  err_int_sans[2:21]), col = "red")
+
+# intensités réduites
+lambda_red <- apply(res$lambda, 2, function(x) {
+  (x-mean(x))/sd(x)
+})
+lambda_avec_red <- apply(res$lambda_avec, 2, function(x) {
+  (x-mean(x))/sd(x)
+})
+lambda_sans_red <- apply(res$lambda_sans, 2, function(x) {
+  (x-mean(x))/sd(x)
+})
+
+err_int_red_avec <- apply((lambda_red - lambda_avec_red)^2, 2, mean)
+err_int_red_sans <- apply((lambda_red - lambda_sans_red)^2, 2, mean)
+
+
+ggplot() +
+  geom_line(aes(x = res$g, y =  err_int_red_avec)) +# -1 : valeur qui explose !
+  geom_line(aes(x = res$g, y =  err_int_red_sans), col = "red")
+
+
+## Identifiabilité #####################
+
+invcond <- NULL
+for (g in sequence) {
+  sigma <- matrix(c(1,0,g,0,1,0,g,0,1), nrow = 3, byrow = TRUE)
+  val <- NULL
+  for (simu in 1:30) {
+    dat <- simu_data(dim, sigma)
+    val <- append(val, identif(dat))
+  }
+  invcond <- append(invcond, mean(val))
+}
+
+plot(sequence, invcond, type = "l")
+
+
+

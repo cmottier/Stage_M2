@@ -14,6 +14,7 @@ library(plot.matrix)
 library(raster)
 library(patchwork)
 library(mvtnorm)
+library(rgl)
 
 # Codes des modèles avec/sans effort -------------------------------------------
 
@@ -24,7 +25,6 @@ code_avec <- nimbleCode({
     # intensité
     log(lambda[pixel]) <- beta[1] +
       beta[2] * x[pixel] +
-      beta[3] * x2[pixel] +
       log_area[pixel]
     # effort
     logit(b[pixel]) <-  alpha[1] + alpha[2] * w[pixel]
@@ -44,7 +44,6 @@ code_avec <- nimbleCode({
   # Priors 
   beta[1] ~ dnorm(0, sd = 2) # intercept
   beta[2] ~ ddexp(0, tau) 
-  beta[3] ~ ddexp(0, tau) 
   tau ~ dunif(0.001,10)
   
   for(j in 1:2){
@@ -64,7 +63,6 @@ code_sans <- nimbleCode({
     # intensité
     log(lambda[pixel]) <- beta[1] +
       beta[2] * x[pixel] +
-      beta[3] * x2[pixel] +
       log_area[pixel]
   }
   
@@ -82,7 +80,6 @@ code_sans <- nimbleCode({
   # Priors 
   beta[1] ~ dnorm(0, sd = 2) # intercept
   beta[2] ~ ddexp(0, tau) 
-  beta[3] ~ ddexp(0, tau) 
   tau ~ dunif(0.001,10)
   
   # probabilité de présence
@@ -100,8 +97,8 @@ nt2 <- 100
 
 # Coefficients choisis ---------------------------------------------------------
 
-alpha <- c(-2, 1) # effort : b = plogis(...+...*w)
-beta <- c(-3, -1, 2) # intensité : l = exp(...+...*x)
+alpha <- c(-1.5, -2) # effort : b = plogis(...+...*w)
+beta <- c(6, 1) # intensité : l = exp(...+...*x)
 
 # Simulation des observations --------------------------------------------------
 
@@ -172,32 +169,11 @@ X <- (X-mean(X))/sd(X)
 X.im <- as.im(X, square(dim))
 # plot(X.im)
 
-X2 <- matrix(runif(dim*dim, -1, 1), nrow = dim)
-X2 <- (X2-mean(X2))/sd(X2)
-X2.im <- as.im(X2, square(dim))
-# plot(X.im)
-
 W <- matrix(rbeta(dim*dim, 1, 3), nrow = dim)
 W <- (W-mean(W))/sd(W)
 W.im <- as.im(W, square(dim))
 # plot(W.im)
 
-### Multinormales ####################################
-
-dim <- 50
-sigma <- matrix(c(1,0,0.95,0,1,0,0.95,0,1), nrow = 3, byrow = TRUE)
-
-covariables <- rmvnorm(dim^2, sigma = sigma)
-covariables <- apply(covariables, 2, function(x) {return((x-mean(x))/sd(x))})
-
-X <- matrix(covariables[,1], nrow = dim)
-X.im <- as.im(X, square(dim))
-
-X2 <- matrix(covariables[,2], nrow = dim)
-X2.im <- as.im(X2, square(dim))
-
-W <- matrix(covariables[,3], nrow = dim)
-W.im <- as.im(W, square(dim))
 
 ### Covariables construites ##########################
 dim <- 50
@@ -205,11 +181,6 @@ X.im <- as.im(function(x,y){sqrt(x+y)}, owin(xrange = c(0,dim), yrange = c(0,dim
 X <- as.matrix.im(X.im)
 X <- (X-mean(X))/sd(X)
 X.im <- as.im(X, square(dim))
-
-X2.im <- as.im(function(x,y){sqrt(100-2*y)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
-X2 <- as.matrix.im(X2.im)
-X2 <- (X2-mean(X2))/sd(X2)
-X2.im <- as.im(X2, square(dim))
 
 # W.im <- as.im(function(x,y){sqrt(dim-x+dim-y)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
 W.im <- as.im(function(x,y){exp(-(y-dim/2)^2/50)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
@@ -224,7 +195,6 @@ dat <- list()
 dat$npix <- dim*dim
 dat$s.loc <- as.data.frame(X.im)[,1:2]
 dat$xcov <- as.data.frame(X.im)$value
-dat$x2cov <- as.data.frame(X2.im)$value
 dat$wcov <- as.data.frame(W.im)$value
 
 # aire des cellules
@@ -232,7 +202,7 @@ area <- 1
 logarea <- log(area)
 
 # Valeurs de lambda et b 
-lambda_v <- as.im(area*exp(beta[1]+beta[2]*X+beta[3]*X2), square(dim))
+lambda_v <- as.im(area*exp(beta[1]+beta[2]*X), square(dim))
 b_v <- as.im(plogis(alpha[1]+alpha[2]*W), square(dim))
 
 # simulation de l'IPPP
@@ -250,7 +220,7 @@ for (i in 1:dat$N.det) {
 
 ## Intensités et efforts ###############################
 
-dat$lambda <- exp(logarea+beta[1]+beta[2]*dat$xcov+beta[3]*dat$x2cov)
+dat$lambda <- exp(logarea+beta[1]+beta[2]*dat$xcov)
 dat$b <- plogis(alpha[1]+alpha[2]*dat$wcov)
 
 # Illustration des données simulées --------------------------------------------
@@ -281,7 +251,6 @@ ggplot() +
 data <- list(
   log_area = rep(logarea, dat$npix),
   x = scale(dat$xcov)[, 1],
-  x2 = scale(dat$x2cov)[, 1],
   w = scale(dat$wcov)[, 1],
   ones = rep(1, dat$N.det)
 )
@@ -295,7 +264,7 @@ constants <- list(
 
 inits <- function(){
   list(
-    beta = rnorm(3, 0, 1),
+    beta = rnorm(2, 0, 1),
     alpha = rnorm(2, 0, 1)
   )
 }
@@ -625,8 +594,9 @@ summary(abs(
 
 # Identifiabilité : matrice de Fisher ------------------------------------------
 
-alpha_0 <- seq(-5, 5, by = 0.05)
-alpha_1 <- alpha[2]
+alpha_0 <- seq(-5, 5, by = 0.1)
+alpha_1 <- seq(-5, 5, by = 0.1)
+
 # beta <- c(log(8000), 0.5) 
 # 
 # dat <- simDataDK(
@@ -642,53 +612,100 @@ alpha_1 <- alpha[2]
 # logarea <- log(dat$s.area / dat$npix)
 
 
-invcond <- NULL
-verif <- NULL
-for (a in alpha_0) { 
-  
-  dat$lambda <- exp(logarea+beta[1]+beta[2]*dat$xcov)
-  dat$b <- plogis(a+alpha_1*dat$wcov)
-  
-  
-  partial_beta <- matrix(
-    data = c(
-      sum(dat$lambda*dat$b),
-      sum(dat$xcov*dat$lambda*dat$b),
-      sum(dat$xcov*dat$lambda*dat$b),
-      sum(dat$xcov^2*dat$lambda*dat$b)
-    ),
-    nrow = 2, 
-    byrow = TRUE
-  )
-  
-  partial_beta_alpha <- matrix(
-    data = c(
-      sum(dat$lambda*dat$b*(1-dat$b)),
-      sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)),
-      sum(dat$xcov*dat$lambda*dat$b*(1-dat$b)),
-      sum(dat$xcov*dat$wcov*dat$lambda*dat$b*(1-dat$b))
-    ),
-    nrow = 2, 
-    byrow = TRUE
-  )
-  
-  partial_alpha <- matrix(
-    data = c(
-      sum(dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$lambda*dat$b^2*(1-dat$b)),
-      sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov*dat$lambda*dat$b^2*(1-dat$b)),
-      sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov*dat$lambda*dat$b^2*(1-dat$b)),
-      sum(dat$wcov^2*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov^2*dat$lambda*dat$b^2*(1-dat$b))
-    ),
-    nrow = 2, 
-    byrow = TRUE
-  )
-  
-  I <- rbind(cbind(partial_beta, partial_beta_alpha),
-             cbind(t(partial_beta_alpha), partial_alpha))
-  
-  verif <- append(verif, sum(eigen(I)$values >0) == 4)
-  invcond <- append(invcond, eigen(I)$values[4]/ eigen(I)$values[1])
+invcond <- matrix(nrow = length(alpha_0), ncol = length(alpha_1))
+bmax <- matrix(nrow = length(alpha_0), ncol = length(alpha_1))
+bmin <- matrix(nrow = length(alpha_0), ncol = length(alpha_1))
+nbobs <- matrix(nrow = length(alpha_0), ncol = length(alpha_1))
+
+
+# verif <- NULL
+for (i in 1:length(alpha_0)) { 
+  for (j in 1:length(alpha_1)) {
+    
+    dat$lambda <- exp(logarea+beta[1]+beta[2]*dat$xcov)
+    dat$b <- plogis(alpha_0[i]+alpha_1[j]*dat$wcov)
+    
+    bmax[i,j] <- max(dat$b)
+    bmin[i,j] <- min(dat$b)
+    
+    partial_beta <- matrix(
+      data = c(
+        sum(dat$lambda*dat$b),
+        sum(dat$xcov*dat$lambda*dat$b),
+        sum(dat$xcov*dat$lambda*dat$b),
+        sum(dat$xcov^2*dat$lambda*dat$b)
+      ),
+      nrow = 2, 
+      byrow = TRUE
+    )
+    
+    partial_beta_alpha <- matrix(
+      data = c(
+        sum(dat$lambda*dat$b*(1-dat$b)),
+        sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)),
+        sum(dat$xcov*dat$lambda*dat$b*(1-dat$b)),
+        sum(dat$xcov*dat$wcov*dat$lambda*dat$b*(1-dat$b))
+      ),
+      nrow = 2, 
+      byrow = TRUE
+    )
+    
+    partial_alpha <- matrix(
+      data = c(
+        sum(dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$lambda*dat$b^2*(1-dat$b)),
+        sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov*dat$lambda*dat$b^2*(1-dat$b)),
+        sum(dat$wcov*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov*dat$lambda*dat$b^2*(1-dat$b)),
+        sum(dat$wcov^2*dat$lambda*dat$b*(1-dat$b)^3*(1-exp(2*logit(dat$b))) + dat$wcov^2*dat$lambda*dat$b^2*(1-dat$b))
+      ),
+      nrow = 2, 
+      byrow = TRUE
+    )
+    
+    I <- rbind(cbind(partial_beta, partial_beta_alpha),
+               cbind(t(partial_beta_alpha), partial_alpha))
+    
+    # verif <- append(verif, sum(eigen(I)$values >0) == 4)
+    invcond[i,j] <- eigen(I)$values[4]/ eigen(I)$values[1]
+  }
 }
 
-table(verif)
-lines(alpha_0, invcond, type = "l", col = "blue")
+# table(verif)
+par(mfrow = c(4,4))
+for (i in 1:101){
+  plot(alpha_1, invcond[i,], type = "l", col = "blue", main = paste0("alpha_0=",as.character(alpha_0[i])), ylim = c(0, 0.013))
+}
+
+dev.off()
+
+par(mfrow = c(4,4))
+for (j in 1:101){
+  plot(alpha_0, invcond[,j], type = "l", col = "blue")
+}
+
+options(rgl.printRglwidget = T) 
+persp3d(x = alpha_0, y = alpha_1, z = invcond, col = "skyblue")
+persp3d(x = alpha_0, y = alpha_1, z = bmax, col = "skyblue")
+persp3d(x = alpha_0, y = alpha_1, z = bmin, col = "skyblue")
+persp3d(x = alpha_0, y = alpha_1, z = bmax-bmin, col = "skyblue")
+
+
+
+do.call(
+  wrap_plots,
+  lapply(-5:5,
+         function(a) {
+           ggplot() +
+             geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = plogis(-5+a*dat$wcov)))+
+             scale_fill_viridis_c(limits = c(0,1)) +
+             labs(x = "", y = "", fill =var)
+         })
+)
+
+
+alpha <- c(-5,-5)
+dat$b <- plogis(alpha[1]+alpha[2]*dat$wcov)
+
+ggplot() +
+  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat$b))+
+  scale_fill_viridis_c(limits = c(0,1)) +
+  labs(x = "", y = "", fill =var)
