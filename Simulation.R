@@ -97,7 +97,7 @@ nt2 <- 100
 
 # Coefficients choisis ---------------------------------------------------------
 
-alpha <- c(-1.5, -2) # effort : b = plogis(...+...*w)
+alpha <- c(0, -4) # effort : b = plogis(...+...*w)
 beta <- c(6, 1) # intensité : l = exp(...+...*x)
 
 # Simulation des observations --------------------------------------------------
@@ -160,6 +160,17 @@ ggplot()+
 # plot(dat$s)
 
 ## Avec le package spatstat ########################################
+# 
+### Covariables fournies par simDataDK ###################
+dim <- 50
+
+# pour tester avec covariables égales !
+X <- matrix(dat$xcov, nrow = dim)
+X <- (X-mean(X))/sd(X)
+X.im <- as.im(X, square(dim))
+
+W <- X
+W.im <- X.im
 
 ### Covariables aléatoires ############################
 dim <- 50
@@ -198,11 +209,11 @@ dat$xcov <- as.data.frame(X.im)$value
 dat$wcov <- as.data.frame(W.im)$value
 
 # aire des cellules
-area <- 1
+area <- 0.0016
 logarea <- log(area)
 
 # Valeurs de lambda et b 
-lambda_v <- as.im(area*exp(beta[1]+beta[2]*X), square(dim))
+lambda_v <- as.im(exp(logarea + beta[1]+beta[2]*X), square(dim))
 b_v <- as.im(plogis(alpha[1]+alpha[2]*W), square(dim))
 
 # simulation de l'IPPP
@@ -594,8 +605,8 @@ summary(abs(
 
 # Identifiabilité : matrice de Fisher ------------------------------------------
 
-alpha_0 <- seq(-5, 5, by = 0.1)
-alpha_1 <- seq(-5, 5, by = 0.1)
+alpha_0 <- seq(-7, 7, by = 0.1)
+alpha_1 <- seq(-7, 7, by = 0.1)
 
 # beta <- c(log(8000), 0.5) 
 # 
@@ -611,12 +622,11 @@ alpha_1 <- seq(-5, 5, by = 0.1)
 # # surface des cellules
 # logarea <- log(dat$s.area / dat$npix)
 
-
 invcond <- matrix(nrow = length(alpha_0), ncol = length(alpha_1))
 bmax <- matrix(nrow = length(alpha_0), ncol = length(alpha_1))
 bmin <- matrix(nrow = length(alpha_0), ncol = length(alpha_1))
-nbobs <- matrix(nrow = length(alpha_0), ncol = length(alpha_1))
 
+# dat$wcov <- dat$xcov
 
 # verif <- NULL
 for (i in 1:length(alpha_0)) { 
@@ -669,35 +679,35 @@ for (i in 1:length(alpha_0)) {
   }
 }
 
-# table(verif)
-par(mfrow = c(4,4))
-for (i in 1:101){
-  plot(alpha_1, invcond[i,], type = "l", col = "blue", main = paste0("alpha_0=",as.character(alpha_0[i])), ylim = c(0, 0.013))
-}
+# # table(verif)
+# par(mfrow = c(3,3))
+# for (i in 1:101){
+#   plot(alpha_1, invcond[i,], type = "l", col = "blue", main = paste0("alpha_0=",as.character(alpha_0[i])), ylim = c(0, 0.013))
+# }
+# 
+# dev.off()
+# 
+# par(mfrow = c(4,4))
+# for (j in 1:101){
+#   plot(alpha_0, invcond[,j], type = "l", col = "blue")
+# }
 
-dev.off()
-
-par(mfrow = c(4,4))
-for (j in 1:101){
-  plot(alpha_0, invcond[,j], type = "l", col = "blue")
-}
-
-options(rgl.printRglwidget = T) 
+# options(rgl.printRglwidget = T) 
 persp3d(x = alpha_0, y = alpha_1, z = invcond, col = "skyblue")
 persp3d(x = alpha_0, y = alpha_1, z = bmax, col = "skyblue")
 persp3d(x = alpha_0, y = alpha_1, z = bmin, col = "skyblue")
 persp3d(x = alpha_0, y = alpha_1, z = bmax-bmin, col = "skyblue")
 
 
-
+a0 = -7
 do.call(
   wrap_plots,
-  lapply(-5:5,
-         function(a) {
+  lapply(-7:7,
+         function(a1) {
            ggplot() +
-             geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = plogis(-5+a*dat$wcov)))+
+             geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = plogis(a0+a1*dat$wcov)))+
              scale_fill_viridis_c(limits = c(0,1)) +
-             labs(x = "", y = "", fill =var)
+             labs(x = "", y = "", fill =var, title = paste0("a0 = ", as.character(a0), ", a1 = ", as.character(a1)))
          })
 )
 
