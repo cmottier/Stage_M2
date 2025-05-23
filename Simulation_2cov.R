@@ -106,6 +106,12 @@ inits <- function() {
 
 ## Avec une loi multinormale (Fithian et al) ############################
 
+#'
+#' @param dim # dimension du carré
+#' @param sigma # corrélation entre x et w
+#'
+#' @returns # liste contenant tous les éléments nécessaires après simulation de l'IPP
+#' 
 simu_data <- function(dim, sigma) {
   # simulation des covariables centrées réduites
   covariables <- rmvnorm(dim^2, sigma = sigma)
@@ -156,6 +162,14 @@ simu_data <- function(dim, sigma) {
 
   return(dat)
 }
+
+# # test 
+# dim <- 50
+# g <- 0.95
+# alpha <- c(-3, 1) # effort : b = plogis(...+...*w)
+# beta <- c(-2, 1, 1) # intensité : l = exp(...+...*x)
+# sigma <- matrix(c(1,0,g,0,1,0,g,0,1), nrow = 3, byrow = T)
+# dat <- simu_data(dim, sigma)
 
 ## Avec des fonctions construites ####################################
 
@@ -361,16 +375,16 @@ resume <- function(out) {
   return(res)
 }
 
-# # tests
-# dim <- 50
-# alpha <- c(-3, 1) # effort : b = plogis(...+...*w)
-# beta <- c(-2, 1, 1) # intensité : l = exp(...+...*x)
-# sigma <- matrix(c(1,0,-0.3,0,1,0,-0.3,0,1), nrow = 3, byrow = TRUE)
-# dat <- simu_data(dim, sigma)
-# dat$N.det
-# identif(dat)
-# out <- estim(dat)
-# res <- resume(out)
+# tests
+dim <- 50
+alpha <- c(-2, 1) # effort : b = plogis(...+...*w)
+beta <- c(-1, -1, 1) # intensité : l = exp(...+...*x)
+sigma <- matrix(c(1,0,0.9,0,1,0,0.9,0,1), nrow = 3, byrow = TRUE)
+dat <- simu_data(dim, sigma)
+dat$N.det
+identif(dat)
+out <- estim(dat)
+res <- resume(out)
 
 # Qualité des ajustements ------------------------------------------------------
 

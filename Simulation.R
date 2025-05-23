@@ -97,7 +97,7 @@ nt2 <- 100
 
 # Coefficients choisis ---------------------------------------------------------
 
-alpha <- c(0, -4) # effort : b = plogis(...+...*w)
+alpha <- c(-1, -2.5) # effort : b = plogis(...+...*w)
 beta <- c(6, 1) # intensité : l = exp(...+...*x)
 
 # Simulation des observations --------------------------------------------------
@@ -604,6 +604,7 @@ summary(abs(
 
 
 # Identifiabilité : matrice de Fisher ------------------------------------------
+# Dorazio + annexe
 
 alpha_0 <- seq(-7, 7, by = 0.1)
 alpha_1 <- seq(-7, 7, by = 0.1)
@@ -692,7 +693,7 @@ for (i in 1:length(alpha_0)) {
 #   plot(alpha_0, invcond[,j], type = "l", col = "blue")
 # }
 
-# options(rgl.printRglwidget = T) 
+options(rgl.printRglwidget = T)
 persp3d(x = alpha_0, y = alpha_1, z = invcond, col = "skyblue")
 persp3d(x = alpha_0, y = alpha_1, z = bmax, col = "skyblue")
 persp3d(x = alpha_0, y = alpha_1, z = bmin, col = "skyblue")
