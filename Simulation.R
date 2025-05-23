@@ -7,7 +7,7 @@ library(ggplot2)
 library(tidyverse)
 # library(sf)
 library(spatstat)
-library(AHMbook)
+# library(AHMbook)
 library(nimble)
 library(MCMCvis)
 library(plot.matrix)
@@ -15,6 +15,8 @@ library(raster)
 library(patchwork)
 library(mvtnorm)
 library(rgl)
+
+source("simdatadk_script.R")
 
 # Codes des modèles avec/sans effort -------------------------------------------
 
@@ -43,7 +45,8 @@ code_avec <- nimbleCode({
   
   # Priors 
   beta[1] ~ dnorm(0, sd = 2) # intercept
-  beta[2] ~ ddexp(0, tau) 
+  
+  beta[2] ~ ddexp(0, tau)
   tau ~ dunif(0.001,10)
   
   for(j in 1:2){
@@ -97,7 +100,7 @@ nt2 <- 100
 
 # Coefficients choisis ---------------------------------------------------------
 
-alpha <- c(-1, -2.5) # effort : b = plogis(...+...*w)
+alpha <- c(0, -5) # effort : b = plogis(...+...*w)
 beta <- c(6, 1) # intensité : l = exp(...+...*x)
 
 # Simulation des observations --------------------------------------------------
@@ -121,23 +124,23 @@ dat <- simDataDK(
   show.plot = FALSE
 ) # donne x et w centrées reduites
 
-str(dat, 1)
+# str(dat, 1)
 
 # Our landscape is inhabited by a total of ... individuals (dat$N.ipp)
-dat$N.ipp
+# dat$N.ipp
 
 # of which ... are detected
-dat$N.det
+# dat$N.det
 
 #Their locations represent our presence-only data: 
 # loc.det contains the coordinates 
-head(dat$loc.det) # Actual coordinates of points detected
+# head(dat$loc.det) # Actual coordinates of points detected
 
 # and pixel.id.det the pixel ID for each detected point.
-head(dat$pixel.id.det) # Pixel ID of 302 points detected
+# head(dat$pixel.id.det) # Pixel ID of 302 points detected
 
 # le thinning est donc de :
-1-dat$N.det/dat$N.ipp
+# 1-dat$N.det/dat$N.ipp
 
 # surface des cellules
 (logarea <- log(dat$s.area / dat$npix))
@@ -209,8 +212,8 @@ dat$xcov <- as.data.frame(X.im)$value
 dat$wcov <- as.data.frame(W.im)$value
 
 # aire des cellules
-area <- 0.0016
-logarea <- log(area)
+# area <- 0.0016
+# logarea <- dat$logarea
 
 # Valeurs de lambda et b 
 lambda_v <- as.im(exp(logarea + beta[1]+beta[2]*X), square(dim))
@@ -695,9 +698,9 @@ for (i in 1:length(alpha_0)) {
 
 options(rgl.printRglwidget = T)
 persp3d(x = alpha_0, y = alpha_1, z = invcond, col = "skyblue")
-persp3d(x = alpha_0, y = alpha_1, z = bmax, col = "skyblue")
-persp3d(x = alpha_0, y = alpha_1, z = bmin, col = "skyblue")
-persp3d(x = alpha_0, y = alpha_1, z = bmax-bmin, col = "skyblue")
+# persp3d(x = alpha_0, y = alpha_1, z = bmax, col = "skyblue")
+# persp3d(x = alpha_0, y = alpha_1, z = bmin, col = "skyblue")
+# persp3d(x = alpha_0, y = alpha_1, z = bmax-bmin, col = "skyblue")
 
 
 a0 = -7
