@@ -1,30 +1,17 @@
 ################################################################################
-#                                Simulation : scenario 1                                   #
+#                                Simulation : scenario 2                                   #
 ################################################################################
 
-# Dans ce scenario, on utilise les covariables construites par simDataDK
-# On considère la même variable pour l'intensité et l'effort : x = w
-# effort : b = plogis(-5w)
-# intensité : l = exp(6+x)
+# Dans ce scenario, on utilise des covariables déterministes peu corrélées
+# Exemple d'un cas très favorable avec effort (effort élevé)
+# effort : b = plogis(-2+2*w)
+# intensité : l = exp(-4+4*x1+1*x2)
 
 # Librairies utiles ------------------------------------------------------------
 # install.packages("spatstat")
 library(spatstat)
 library(nimble)
 library(raster)
-
-# library(ggplot2)
-# library(tidyverse)
-# library(sf)
-# library(MCMCvis)
-# library(plot.matrix)
-# library(patchwork)
-# library(mvtnorm)
-# library(rgl)
-
-# import de la fonction simDataDk telle que dans AHMbook
-source("simdatadk_script.R") 
-
 
 # Codes des modèles avec/sans effort -------------------------------------------
 
@@ -35,6 +22,7 @@ code_avec <- nimbleCode({
     # intensité
     log(lambda[pixel]) <- beta[1] +
       beta[2] * x[pixel] +
+      beta[3] * x2[pixel] +
       log_area[pixel]
     # effort
     logit(b[pixel]) <-  alpha[1] + alpha[2] * w[pixel]
@@ -54,6 +42,7 @@ code_avec <- nimbleCode({
   # Priors 
   beta[1] ~ dnorm(0, sd = 2) # intercept
   beta[2] ~ ddexp(0, tau) 
+  beta[3] ~ ddexp(0, tau) 
   tau ~ dunif(0.001,10)
   
   for(j in 1:2){
@@ -71,6 +60,7 @@ code_sans <- nimbleCode({
     # intensité
     log(lambda[pixel]) <- beta[1] +
       beta[2] * x[pixel] +
+      beta[3] * x2[pixel] +
       log_area[pixel]
   }
   
@@ -88,8 +78,9 @@ code_sans <- nimbleCode({
   # Priors 
   beta[1] ~ dnorm(0, sd = 2) # intercept
   beta[2] ~ ddexp(0, tau) 
+  beta[3] ~ ddexp(0, tau) 
   tau ~ dunif(0.001,10)
-
+  
 })
 
 ## Paramètres communs #########################
@@ -103,7 +94,7 @@ nt <- 1
 
 inits <- function(){
   list(
-    beta = rnorm(2, 0, 1),
+    beta = rnorm(3, 0, 1),
     alpha = rnorm(2, 0, 1)
   )
 }
@@ -111,53 +102,44 @@ inits <- function(){
 
 # Coefficients choisis ---------------------------------------------------------
 
-alpha <- c(0, -5) # effort : b = plogis(...+...*w)
-beta <- c(6, 1) # intensité : l = exp(...+...*x)
+alpha <- c(-2, 2) # effort : b = plogis(...+...*w)
+beta <- c(-4, 4, 1) # intensité : l = exp(...+...*x)
 
 
 # Construction des données -----------------------------------------------------
 
-# variable d'environnement x fournie par simDataDK
-
-set.seed(123)
-
 dim <- 50
-
-dat <- simDataDK(
-  sqrt.npix = dim, 
-  alpha = alpha, 
-  beta = beta, 
-  drop.out.prop.pb = 0, 
-  quadrat.size = 2,
-  show.plot = FALSE
-) # donne x et w centrées reduites
-
-# surface des cellules
-logarea <- log(dat$s.area / dat$npix)
-
-# On change les formats (spatstat) en remplaçant w par x 
-
-X <- matrix(dat$xcov, nrow = dim)
+X.im <- as.im(function(x,y){sqrt(x+y)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
+X <- as.matrix.im(X.im)
 X <- (X-mean(X))/sd(X)
 X.im <- as.im(X, square(dim))
 
-W <- X
-W.im <- X.im
+X2.im <- as.im(function(x,y){sqrt(100-2*y)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
+X2 <- as.matrix.im(X2.im)
+X2 <- (X2-mean(X2))/sd(X2)
+X2.im <- as.im(X2, square(dim))
 
-# Construction de dat 
+W.im <- as.im(function(x,y){exp(-(y-dim/2)^2/50)}, owin(xrange = c(0,dim), yrange = c(0,dim)), dimyx = dim)
+W <- as.matrix.im(W.im)
+W <- (W-mean(W))/sd(W)
+W.im <- as.im(W, square(dim))
 
 dat <- list()
 dat$npix <- dim*dim
 dat$s.loc <- as.data.frame(X.im)[,1:2]
 dat$xcov <- as.data.frame(X.im)$value
+dat$x2cov <- as.data.frame(X2.im)$value
 dat$wcov <- as.data.frame(W.im)$value
 
-# Vraies valeurs de lambda et b 
-lambda_v <- as.im(exp(logarea + beta[1]+beta[2]*X), square(dim))
+# aire des cellules
+area <- 1
+logarea <- log(area)
+dat$logarea <- logarea
+
+# Valeurs de lambda et b 
+lambda_v <- as.im(area*exp(beta[1]+beta[2]*X+beta[3]*X2), square(dim))
 b_v <- as.im(plogis(alpha[1]+alpha[2]*W), square(dim))
 
-dat$lambda <- exp(logarea+beta[1]+beta[2]*dat$xcov)
-dat$b <- plogis(alpha[1]+alpha[2]*dat$wcov)
 
 
 # Réalisation des simulations et estimations -----------------------------------
@@ -185,6 +167,7 @@ estim <- function(dat) {
   data <- list(
     log_area = rep(logarea, dat$npix),
     x = dat$xcov,
+    x2 = dat$x2cov,
     w = dat$wcov,
     ones = rep(1, dat$N.det)
   )
@@ -249,5 +232,5 @@ for (i in 1:n) {
   resultat[[i]] <- resume(out)
 }
 
-save(resultat, file = "simulation_scenario1.RData")
+save(resultat, file = "simulation_scenario2.RData")
 

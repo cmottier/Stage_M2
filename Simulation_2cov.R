@@ -12,6 +12,7 @@ library(MCMCvis)
 # library(raster)
 library(patchwork)
 library(mvtnorm)
+library(rgl)
 
 # Codes des modèles avec/sans effort -------------------------------------------
 
@@ -100,6 +101,10 @@ inits <- function() {
   list(beta = rnorm(3, 0, 1), alpha = rnorm(2, 0, 1))
 }
 
+# Coefficients choisis ---------------------------------------------------------
+
+alpha <- c(-5, 2) # effort : b = plogis(...+...*w)
+beta <- c(-1, 4, 1) # intensité : l = exp(...+...*x)
 
 
 # Simulation des observations avec spatstat ------------------------------------
@@ -199,6 +204,7 @@ dat$wcov <- as.data.frame(W.im)$value
 # aire des cellules
 area <- 1
 logarea <- log(area)
+dat$logarea <- logarea
 
 # Valeurs de lambda et b 
 lambda_v <- as.im(area*exp(beta[1]+beta[2]*X+beta[3]*X2), square(dim))
@@ -256,6 +262,44 @@ identif <- function(dat) {
   
   return(min(abs(eigen(Hmat)$values))/ max(abs(eigen(Hmat)$values)))
 } 
+
+alpha_0 <- seq(-7, 7, by = 0.1)
+alpha_1 <- seq(-7, 7, by = 0.1)
+
+
+invcond <- matrix(nrow = length(alpha_0), ncol = length(alpha_1))
+
+# verif <- NULL
+for (i in 1:length(alpha_0)) { 
+  for (j in 1:length(alpha_1)) {
+    
+    dat$lambda <- exp(logarea+beta[1]+beta[2]*dat$xcov+beta[2]*dat$x2cov)
+    dat$b <- plogis(alpha_0[i]+alpha_1[j]*dat$wcov)
+    
+    # verif <- append(verif, sum(eigen(I)$values >0) == 4)
+    invcond[i,j] <- identif(dat)
+  }
+}
+
+
+options(rgl.printRglwidget = T)
+persp3d(x = alpha_0, y = alpha_1, z = invcond, col = "skyblue")
+# persp3d(x = alpha_0, y = alpha_1, z = bmax, col = "skyblue")
+# persp3d(x = alpha_0, y = alpha_1, z = bmin, col = "skyblue")
+# persp3d(x = alpha_0, y = alpha_1, z = bmax-bmin, col = "skyblue")
+
+
+a0 = -7
+do.call(
+  wrap_plots,
+  lapply(-7:7,
+         function(a1) {
+           ggplot() +
+             geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = plogis(a0+a1*dat$wcov)))+
+             scale_fill_viridis_c(limits = c(0,1)) +
+             labs(x = "", y = "", fill =var, title = paste0("a0 = ", as.character(a0), ", a1 = ", as.character(a1)))
+         })
+)
 
 
 
