@@ -17,7 +17,7 @@ library(tidyverse)
 
 ## Evolution des coefficients ###############################
 
-periode <- 2010:2024
+periode <- 2020:2020
 
 # extraction des coefficients
 resume <- NULL
@@ -73,7 +73,7 @@ p
 
 ## Distributions des intensités, efforts, probabilités ##############
 
-annee = 2020
+annee = 2019
 
 out <- get(paste0("outMCMC_", annee))
 
@@ -165,4 +165,5 @@ plot_p <- do.call(
 )
 
 plot_p
+
 

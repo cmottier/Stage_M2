@@ -103,8 +103,8 @@ inits <- function() {
 
 # Coefficients choisis ---------------------------------------------------------
 
-alpha <- c(-5, 2) # effort : b = plogis(...+...*w)
-beta <- c(-1, 4, 1) # intensité : l = exp(...+...*x)
+alpha <- c(0, 0.05) # effort : b = plogis(...+...*w)
+beta <- c(-4, 4, 1) # intensité : l = exp(...+...*x)
 
 
 # Simulation des observations avec spatstat ------------------------------------
@@ -168,13 +168,14 @@ simu_data <- function(dim, sigma) {
   return(dat)
 }
 
-# # test 
-# dim <- 50
-# g <- 0.95
-# alpha <- c(-3, 1) # effort : b = plogis(...+...*w)
-# beta <- c(-2, 1, 1) # intensité : l = exp(...+...*x)
-# sigma <- matrix(c(1,0,g,0,1,0,g,0,1), nrow = 3, byrow = T)
-# dat <- simu_data(dim, sigma)
+# test
+dim <- 50
+g <- 0.95
+alpha <- c(-2, 1) # effort : b = plogis(...+...*w)
+beta <- c(-2, 1, 1) # intensité : l = exp(...+...*x)
+sigma <- matrix(c(1,0,g,0,1,0,g,0,1), nrow = 3, byrow = T)
+dat <- simu_data(dim, sigma)
+dat$N.det
 
 ## Avec des fonctions construites ####################################
 
@@ -225,6 +226,30 @@ for (i in 1:dat$N.det) {
 # intensité et effort
 dat$lambda <- exp(logarea+beta[1]+beta[2]*dat$xcov+beta[3]*dat$x2cov)
 dat$b <- plogis(alpha[1]+alpha[2]*dat$wcov)
+
+
+# Illustrations des données simulées -------------------------------------------
+
+var = "xcov"
+var = "x2cov"
+var = "wcov"
+var = "lambda"
+var = "b"
+
+ggplot() +
+  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat[[var]]))+
+  geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+  scale_fill_viridis_c() +
+  labs(x = "", y = "", fill =var)
+
+fill = dat$b*dat$lambda
+
+ggplot() +
+  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = fill))+
+  geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
+  scale_fill_viridis_c() +
+  labs(x = "", y = "", fill = "lambda*b")
+
 
 
 
@@ -300,30 +325,6 @@ do.call(
              labs(x = "", y = "", fill =var, title = paste0("a0 = ", as.character(a0), ", a1 = ", as.character(a1)))
          })
 )
-
-
-
-# Illustrations des données simulées -------------------------------------------
-
-var = "xcov"
-var = "x2cov"
-var = "wcov"
-var = "lambda"
-var = "b"
-
-ggplot() +
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = dat[[var]]))+
-  geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c() +
-  labs(x = "", y = "", fill =var)
-
-fill = dat$b*dat$lambda
-
-ggplot() +
-  geom_raster(data = dat$s.loc, aes(x = x, y = y, fill = fill))+
-  geom_point(data = dat$loc.det, aes(x = x, y = y), col = "white") +
-  scale_fill_viridis_c() +
-  labs(x = "", y = "", fill = "lambda*b")
 
 
 

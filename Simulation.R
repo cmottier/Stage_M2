@@ -100,7 +100,7 @@ nt2 <- 100
 
 # Coefficients choisis ---------------------------------------------------------
 
-alpha <- c(0, -5) # effort : b = plogis(...+...*w)
+alpha <- c(0, 0.1) # effort : b = plogis(...+...*w)
 beta <- c(6, 1) # intensité : l = exp(...+...*x)
 
 # Simulation des observations --------------------------------------------------
@@ -295,7 +295,7 @@ model_avec <- nimbleModel(
 Cmodel_avec <- compileNimble(model_avec)
 
 conf_avec <- configureMCMC(Cmodel_avec, monitors = c("beta", "alpha"),
-                        monitors2 = c("lambda", "b", "p"), thin = nt, thin2 = nt2)
+                        monitors2 = c("lambda", "b"), thin = nt, thin2 = nt2)
 
 Rmcmc_avec <- buildMCMC(conf_avec)
 Cmcmc_avec <- compileNimble(Rmcmc_avec, project = Cmodel_avec)
@@ -320,7 +320,7 @@ model_s <- nimbleModel(
 Cmodel_s <- compileNimble(model_s)
 
 conf_s <- configureMCMC(Cmodel_s, monitors = c("beta"),
-                        monitors2 = c("lambda", "p"), thin = nt, thin2 = nt2)
+                        monitors2 = c("lambda"), thin = nt, thin2 = nt2)
 
 Rmcmc_s <- buildMCMC(conf_s)
 Cmcmc_s <- compileNimble(Rmcmc_s, project = Cmodel_s)

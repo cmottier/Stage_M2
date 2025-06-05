@@ -1,0 +1,237 @@
+################################################################################
+#          Modèle multi-année - approche bayésienne            #
+################################################################################
+
+# Librairies utiles ------------------------------------------------------------
+
+library(nimble)
+library(sf)
+library(tidyverse)
+library(MCMCvis)
+
+
+# Chargement et travail préalable sur grid -------------------------------------
+
+# Chargement de la grille complète
+load("RData/50km2/grid_sf_50km2.RData")
+
+# Code Nimble -----------------------------------------------------------------
+# Multiples détections par cellule
+
+# avec un effet aléatoire sur intercepts seuls
+
+code1 <- nimbleCode({
+  # intensité et effort pour toutes les cellules
+  for(pixel in 1:npixel){
+    for (a in nb_annees){
+      # intensité
+      log(lambda[pixel,a]) <- beta0[a] +
+        beta[1] * x_1[pixel] +
+        beta[2] * x_2[pixel] +
+        beta[3] * x_3[pixel] + 
+        beta[4] * x_4[pixel,a] + 
+        beta[5] * x_5[pixel,a] + 
+        cell_area[pixel]
+      # effort
+      logit(b[pixel,a]) <-  alpha0[a] + alpha1 * h_1[pixel,a]
+    }
+  }
+  
+  # pour les nobs observations (obs_pixel)
+  for (a in nb_annees) {
+    obs_denominator[a] <- inprod(lambda[1:npixel,a], b[1:npixel,a]) / nobs[a]
+    
+    for(obs in 1:nobs[a]){
+      ones[obs,a] ~ dbern(
+        exp(
+          log(lambda[obs_pixel[obs,a]] * b[obs_pixel[obs,a]]) -
+            obs_denominator[a])   
+        / CONSTANT) 
+    }
+  }
+  
+  # Priors 
+  for (a in nb_annees) {
+    beta0[a] ~ dnorm(0, sd = 2) 
+    alpha0[a] ~ dnorm(0, sd = 2)
+    }
+  for(i in 1:5){
+    beta[i] ~ ddexp(0, tau) 
+  }
+  tau ~ dunif(0.001,10)
+  alpha1 ~ dnorm(0, sd = 2)
+
+  # probabilité de présence
+  # p[1:npixel,periode] <- 1-exp(-lambda[1:npixel,periode])
+})
+
+
+
+# Estimation -------------------------------------------------------------------
+
+## Fonction pour choisir le modèle  ##################
+
+#' Estimation des paramètres (IPP)
+#'
+#' @param grid # grille à utiliser
+#' @param modele # modèle à utiliser
+#' @param periode # période de temps, numérotée à partir de 1
+#'
+estim_param <- function(grid, modele, periode) {
+  # Nombre d'années
+  nb_annees <- length(periode)
+  
+  # Nombre de pixels
+  npix <- nrow(grid)
+  
+  # Aire des pixels
+  s.area <- as.numeric(units::set_units(grid$area,"km^2"))
+  logarea <- log(s.area)
+  
+  # Observations annuelles
+  pixel.id.det <- NULL
+  nb_observations <- NULL
+  nobs <- NULL
+  
+  for (a in nb_annees) {
+    # ID des cellules où il y a au moins une occurrence
+    pixel.id.det[[a]] <- grid$grid_id[grid[[paste0("nnutria", periode[a])]] > 0]
+    
+    # Troncature des observations
+    nb_observations[[a]] <- grid[[paste0("nnutria", periode[a])]] 
+    nb_observations[[a]][nb_observations[[a]] > 50] <- 50 # valeur arbitraire à définir
+    
+    # nombre total d'observations prises en compte
+    nobs[a] <- sum(nb_observations[[a]])
+    
+    # pixel associé aux observations (avec répétition)
+    obs_pixel <- NULL
+    for (i in 1:length(pixel.id.det[[a]])){
+      obs_pixel[,a] <- c(obs_pixel[,a], rep(pixel.id.det[[a]][i], nb_observations[[a]][pixel.id.det[[a]][i]]))
+    }
+  }
+  
+  # Variables 
+  data <- list(cell_area = logarea,
+               x_1 = scale(grid$dist_eau)[,1],
+               x_2 = scale(grid$logdensity)[,1],
+               x_3 = scale(grid$agri_cover)[,1],
+               x_4 = apply(grid_sf %>% select(starts_with("pcum")) %>% st_drop_geometry, 2, function(x){return((x-mean(x))/sd(x))}),
+               x_5 = apply(grid_sf %>% select(starts_with("tmin")) %>% st_drop_geometry, 2, function(x){return((x-mean(x))/sd(x))}),
+               h_1 = apply(grid_sf %>% select(starts_with("dgbif")) %>% st_drop_geometry, 2, function(x){return((x-mean(x))/sd(x))}),
+               ones = matrix(1, nrow = )
+               )
+  
+  if (modele == 1) { data$ones <- rep(1, length(pixel.id.det)) }
+
+
+  
+  constants <- list(
+    npixel = npix,
+    nobs = nobs,
+    m = length(pixel.id.det), 
+    CONSTANT = 50000,
+    po_pixel = pixel.id.det,
+    obs_pixel = obs_pixel
+    ) 
+  
+  # Initialisation
+  inits <- function(){
+    list(
+      beta = rnorm(6, 0, 1), 
+      alpha = rnorm(2, 0, 1)
+    )
+  }
+  
+  # Paramètres à suivre
+  params <- c("alpha", "beta") 
+  params2 <- c("lambda", "b", "p") 
+  
+  # MCMC settings
+  nc <- 2
+  nburn <- 10000 
+  ni <- nburn + 30000 
+  nt <- 1
+  
+  # MCMC
+  if (modele == 1) {code <- code_uni} else {code <- code_multi}
+  
+  model <- nimbleModel(
+    code = code,
+    constants = constants,
+    data = data,
+    inits = inits()
+  )
+  
+  Cmodel <- compileNimble(model)
+  
+  conf <- configureMCMC(Cmodel, monitors = params,
+                            monitors2 = params2, thin = nt, thin2 = 1000)
+  
+  Rmcmc <- buildMCMC(conf)
+  Cmcmc <- compileNimble(Rmcmc, project = Cmodel)
+  
+  out <- runMCMC(
+    Cmcmc,
+    niter = ni,
+    nburnin = nburn,
+    nchains = nc
+    # WAIC = TRUE
+  )
+  
+  # sortie
+  return(out)
+}
+
+
+## Lancement et sauvegarde #################
+
+periode = 2010:2024
+
+for (annee in periode) {
+  print(annee)
+  set.seed(123)
+  # assign(
+  #   x = paste0("outMCMC_", annee),
+  #   value = estim_param(
+  #     grid = grid_sf,
+  #     modele = 1,
+  #     effort = "gbif",
+  #     annee = annee
+  #   )
+  # )
+  out <- estim_param(
+    grid = grid_sf,
+    modele = 2,
+    effort = "gbif",
+    annee = annee
+  )
+  save(out, file = paste0("out_multi_gbif_l_iep", annee, ".RData"))
+}
+
+# ## Plot ############################
+# 
+# MCMCsummary(out$samples, param=c("alpha", "beta"))
+# MCMCtrace(out$samples, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
+# MCMCplot(out$samples)
+# 
+# # extraction des coefficients
+# resume <- MCMCsummary(out$samples) %>%
+#     rename(
+#       "lower" = "2.5%",
+#       "median" = "50%",
+#       "upper" = "97.5%"
+#     ) %>%
+#     rownames_to_column("param")
+# 
+# res <- rbind(out$samples2$chain1, out$samples2$chain2)
+# 
+# # extraction des intensités (médiane)
+# mask <- str_detect(colnames(res), "lambda")
+# res_lambda <- res[,mask]
+# lambdaestim <- apply(res_lambda, 2, median)
+# lambdasd <- apply(res_lambda, 2, sd)
+# 
+# ggplot() +
+#   geom_sf(data = grid_sf, aes(fill = lambdaestim)) +
+#   scale_fill_viridis_c(begin = 0, end = 1)

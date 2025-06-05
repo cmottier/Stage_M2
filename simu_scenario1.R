@@ -111,7 +111,7 @@ inits <- function(){
 
 # Coefficients choisis ---------------------------------------------------------
 
-alpha <- c(0, -5) # effort : b = plogis(...+...*w)
+alpha <- c(-1, -5) # effort : b = plogis(...+...*w)
 beta <- c(6, 1) # intensité : l = exp(...+...*x)
 
 
@@ -249,5 +249,5 @@ for (i in 1:n) {
   resultat[[i]] <- resume(out)
 }
 
-save(resultat, file = "simulation_scenario1.RData")
+save(resultat, file = "simulation_scenario1_bis.RData")
 
