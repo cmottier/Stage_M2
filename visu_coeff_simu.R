@@ -2,14 +2,14 @@
 
 library(ggplot2)
 
-num <- 2
+num <- 1
 
-load(paste0("RData/Simulations/simulation_scenario",num,".RData"))
+load(paste0("RData/Simulations/simulation_scenario",num,"_bis.RData"))
 
 # coefficients utilisés et nombre de variables
 if (num ==1) {
   # scenario1
-  alpha <- c(0, -5) 
+  alpha <- c(-1, -5) 
   beta <- c(6, 1)
 } else if (num == 2) {
   # scenario2
