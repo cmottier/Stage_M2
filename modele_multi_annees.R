@@ -12,7 +12,7 @@ library(tidyverse)
 
 # Chargement  de la grille -----------------------------------------------------
 
-load("grid_sf_50km2.RData")
+load("grid_sf_5km2.RData")
 
 # Construction des données utiles aux modèles ----------------------------------
 
@@ -301,10 +301,10 @@ estim_param <- function(grid, modele, periode, inits) {
 
 ## Lancement et sauvegarde #################
 
-periode = 2010:2024
+periode = 2010:2015
 nb_annees <- length(periode)
-modele = 2
-load("inits_modele2_50km2_2010-2024.RData")
+modele = 1
+load("inits_modele1_5km2_2010-2015.RData")
 
 out <- estim_param(
   grid = grid_sf,
@@ -314,86 +314,86 @@ out <- estim_param(
   # inits = inits_list
 )
 
-save(out, file = "modele2_10-24_50km2.RData")
+save(out, file = "modele1_10-15_5km2.RData")
 
 
 # Plot -------------------------------------------------------------------------
 
-library(MCMCvis)
-library(patchwork)
-
-(resume <- MCMCsummary(out$samples))
-MCMCtrace(out$samples, pdf = FALSE, ind = TRUE)
-MCMCplot(out$samples)
-
-
-int_eff <- grid_sf %>%
-  select(grid)
-
-# out <- get(paste0("outMCMC_", annee))
-# load(paste0("Resultats_MCMC/5km2_avec_lasso/out_multi_gbif_l_iep", annee, ".RData"))
-res <- rbind(out$samples2$chain1, out$samples2$chain2)
-mask <- str_detect(colnames(res), "lambda")
-res_lambda <- res[,mask]
-res_lambda <- apply(res_lambda, 2, median)
-max_lambda <- max(res_lambda)
-res_lambda <- matrix(res_lambda, ncol = length(periode), byrow = FALSE)
-for (a in 1:length(periode)) {
-  int_eff[[paste0("lambda_med", periode[a]) ]] <- res_lambda[,a]
-}
-mask <- str_detect(colnames(res), "b[^d]")
-res_b <- res[,mask]
-res_b <- apply(res_b, 2, median)
-res_b <- matrix(res_b, ncol = length(periode), byrow = FALSE)
-for (a in 1:length(periode)) {
-  int_eff[[paste0("b_med", periode[a]) ]] <- res_b[,a]
-}
-
-# Intensité
-plot_l <- do.call(
-  wrap_plots,
-  lapply(periode,
-         function(x) {
-           ggplot() +
-             geom_sf(data = int_eff, color = NA, aes(fill = get(paste0("lambda_med", x)))) +
-             labs(fill = "Intensité") +
-             scale_fill_viridis_c(begin = 0, end = 1, limits = c(0, max_lambda)) + # pour fixer couleurs
-           labs(title = x) +
-             theme_light()
-         })
-)
-
-plot_l
-
-# Intensité normalisée
-plot_l_scaled <- do.call(
-  wrap_plots,
-  lapply(periode,
-         function(x) {
-           ggplot() +
-             geom_sf(data = int_eff, color = NA, aes(fill = scale(get(paste0("lambda_med", x)))[,1])) +
-             labs(fill = "Intensité") +
-             scale_fill_viridis_c(begin = 0, end = 1, limits = c(-1.5,5)) + # pour fixer couleurs
-             labs(title = x) +
-             theme_light()
-         })
-)
-
-plot_l_scaled
-
-# effort
-plot_b <- do.call(
-  wrap_plots,
-  lapply(periode,
-         function(x) {
-           ggplot() +
-             geom_sf(data = int_eff, color = NA, aes(fill = get(paste0("b_med", x)))) +
-             labs(fill = "Effort") +
-             scale_fill_viridis_c(begin = 0, end = 1, limits = c(0, 1)) + # pour fixer couleurs
-             labs(title = x) +
-             theme_light()
-         })
-)
-
-plot_b
-
+# library(MCMCvis)
+# library(patchwork)
+# 
+# (resume <- MCMCsummary(out$samples))
+# MCMCtrace(out$samples, pdf = FALSE, ind = TRUE)
+# MCMCplot(out$samples)
+# 
+# 
+# int_eff <- grid_sf %>%
+#   select(grid)
+# 
+# # out <- get(paste0("outMCMC_", annee))
+# # load(paste0("Resultats_MCMC/5km2_avec_lasso/out_multi_gbif_l_iep", annee, ".RData"))
+# res <- rbind(out$samples2$chain1, out$samples2$chain2)
+# mask <- str_detect(colnames(res), "lambda")
+# res_lambda <- res[,mask]
+# res_lambda <- apply(res_lambda, 2, median)
+# max_lambda <- max(res_lambda)
+# res_lambda <- matrix(res_lambda, ncol = length(periode), byrow = FALSE)
+# for (a in 1:length(periode)) {
+#   int_eff[[paste0("lambda_med", periode[a]) ]] <- res_lambda[,a]
+# }
+# mask <- str_detect(colnames(res), "b[^d]")
+# res_b <- res[,mask]
+# res_b <- apply(res_b, 2, median)
+# res_b <- matrix(res_b, ncol = length(periode), byrow = FALSE)
+# for (a in 1:length(periode)) {
+#   int_eff[[paste0("b_med", periode[a]) ]] <- res_b[,a]
+# }
+# 
+# # Intensité
+# plot_l <- do.call(
+#   wrap_plots,
+#   lapply(periode,
+#          function(x) {
+#            ggplot() +
+#              geom_sf(data = int_eff, color = NA, aes(fill = get(paste0("lambda_med", x)))) +
+#              labs(fill = "Intensité") +
+#              scale_fill_viridis_c(begin = 0, end = 1, limits = c(0, max_lambda)) + # pour fixer couleurs
+#            labs(title = x) +
+#              theme_light()
+#          })
+# )
+# 
+# plot_l
+# 
+# # Intensité normalisée
+# plot_l_scaled <- do.call(
+#   wrap_plots,
+#   lapply(periode,
+#          function(x) {
+#            ggplot() +
+#              geom_sf(data = int_eff, color = NA, aes(fill = scale(get(paste0("lambda_med", x)))[,1])) +
+#              labs(fill = "Intensité") +
+#              scale_fill_viridis_c(begin = 0, end = 1, limits = c(-1.5,5)) + # pour fixer couleurs
+#              labs(title = x) +
+#              theme_light()
+#          })
+# )
+# 
+# plot_l_scaled
+# 
+# # effort
+# plot_b <- do.call(
+#   wrap_plots,
+#   lapply(periode,
+#          function(x) {
+#            ggplot() +
+#              geom_sf(data = int_eff, color = NA, aes(fill = get(paste0("b_med", x)))) +
+#              labs(fill = "Effort") +
+#              scale_fill_viridis_c(begin = 0, end = 1, limits = c(0, 1)) + # pour fixer couleurs
+#              labs(title = x) +
+#              theme_light()
+#          })
+# )
+# 
+# plot_b
+# 

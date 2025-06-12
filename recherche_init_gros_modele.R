@@ -53,14 +53,14 @@ valeurs_inits <- function(code, constants, data, params, inits) {
 donnees_utiles <- extract_data(grid_sf, periode) 
 
 inits <- valeurs_inits(
-  code = code2,
+  code = code1,
   constants = donnees_utiles$constants,
   data = donnees_utiles$data,
-  params = params(2),
-  inits = inits2
+  params = params(1),
+  inits = inits1
 )
 
-save(inits, file = "RData/Inits/inits_modele2_50km2_2010-2024.RData")
+save(inits, file = "RData/Inits/inits_modele1_5km2_2010-2015.RData")
 
 
 # Pour une liste de valeurs initiales différentes ------------------------------
