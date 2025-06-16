@@ -8,7 +8,7 @@
 
 -   **`Construction_grille.R`** contient le code permettant de construire la table `grid_sf` donnant la grille à l'échelle voulue et contenant toutes les données associées sur la période 2010-2024 : observations de ragondins et covariables.
 
--   **`model_periode.R`** contient le code permettant de fitter les différents modèles associés à la période voulue : en fonction de l'approche de l'effort retenue et du nombre d'observations considéré par cellule.
+-   **`model_periode.R`** contient le code permettant de fitter les différents modèles associés à la période voulue (année par année), en fonction de l'approche de l'effort retenue et du nombre d'observations considéré par cellule.
 
 -   **`mapview.R`** contient les essais d'utilisation du package mapview.
 
@@ -28,6 +28,12 @@
 
 -   Le dossier *Anciens_codes* contient les scripts de travail portant sur les différents éléments.
 
+-   **`code_multi_annees.R`**, **`inits_multi_annees.R`** et **`estim_multi_annees.R`** regroupent les éléments de codes utiles pour les modèles prenant en compte toutes les années : les codes, la recherche d'initialisation adéquate et enfin l'ajustement des modèles.
+
+-   **`simu_scenario....R`** permettent les simulations d'un IPPP selon différents scénarios (et à partir de variables construites différemment). **`simdatadk_script.R`** reprend les fonctions utiles du package AHMbook. **`Simulation.R`** et **`Simulation_2cov.R`** regroupent les différents essais effectués (avec une ou deux covariables d'intensité).
+
+-   **`visu_coeff_simu.R`** permet de visualiser les coefficients fittés et les intervalles de crédibilité associés pour les différents scénarios de simulation.
+
 ### Les données
 
 Le dossier `Data` contient les bases de données utilisées, ainsi que le dossier `A_charger` qui rassemble les sorties de **`Donnees_brutes.R`** résumant les données utiles à la construction de la grille.
@@ -38,19 +44,15 @@ Le dossier `Data` contient les bases de données utilisées, ainsi que le dossie
 
 Ce dossier contient les fichiers .RData permettant de charger des variables de l'environnement R sans avoir à tout recompiler.
 
+-   Les dossiers **`5km2`** et **`50km2`** contiennent les grilles construites et les variables associées.
+
+-   Le dossier **`Inits`** contient les initiations des coefficients pour les différents gros modèles (afin d'éviter les logprob infinis)
+
+-   Le dossier **`Simulations`** contient les résultats des différentes simulations effectuées
+
 -   `buffer...` : fournit les buffers autour des plans d'eau et des rivières
 
 -   `gbif_data` : les données GBIF importées qui sont utilisées pour créer la variable d'effort GBIF
-
--   `grid_sf...` : les différentes grilles construites en fonction de la taille de maille
-
--   `out...` : les résultats obtenus après l'estimation des différents modèles.
-
-    -   env / gbif : si l'effort est décrit à partir des routes et chemins ou à partir des données GBIF
-
-    -   mult : si toutes les détections par cellule sont utilisées
-
-    -   dist : si la présence d'eau est décrite à partir des distances aux plans d'eau et aux rivières
 
 ### Images
 
