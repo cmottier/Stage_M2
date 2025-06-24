@@ -5,25 +5,46 @@ library(patchwork)
 library(sf)
 library(tidyverse)
 
-## Vérification d'une année #################################
+periode <- 2010:2024
 
-# annee = 2024
-# 
-# out <- get(paste0("outMCMC_", annee))
-# 
-# MCMCsummary(out, param=c("alpha", "beta"))
-# MCMCtrace(out, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
+## Observation d'une variable #################################
+v <- "tmin_" 
+v <- "pcum_"
+v <- "dgbif_"
+
+do.call(
+  wrap_plots,
+  lapply(periode,
+         function(x) {
+           ggplot() +
+             geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(get(paste0(v, x))))) +
+             labs(v) + 
+             scale_fill_viridis_c(begin = 0, end = 1) +# limits = c(0, 10)) pour fixer couleurs
+             labs(title = x) +
+             theme_light()
+         })
+)
+
+v <- "agri_cover"  
+v <- "density"
+v <- "logdensity"   
+v <- "dist_acces"     
+v <- "dist_eau" 
+
+ggplot() +
+  geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(.data[[v]]))) +
+  labs(v) + 
+  scale_fill_viridis_c(begin = 0, end = 1) +# limits = c(0, 10)) pour fixer couleurs
+  theme_light()
 
 
 ## Evolution des coefficients ###############################
-
-periode <- 2020:2020
 
 # extraction des coefficients
 resume <- NULL
 for (annee in periode) {
   # out <- get(paste0("outMCMC_", annee))
-  load(paste0("Resultats_MCMC/5km2/Avec_lasso/out_multi_gbif_l_iep", annee, ".RData"))
+  load(paste0("Resultats_MCMC/5km2/Annee_par_annee/out_multi_gbif_l_", annee, ".RData"))
   resume_out <- MCMCsummary(out$samples) %>%
     rename(
       "lower" = "2.5%",
@@ -35,7 +56,7 @@ for (annee in periode) {
   resume <- rbind(resume, resume_out)
 }
 
-# save(resume, file = "Resultats_MCMC/5km2/coeff_periode_uni_gbif.RData")
+# save(resume, file = "Resultats_MCMC/5km2/Annee_par_annee/resume_multi_gbif_l.RData")
 
 # plot 
 p <- ggplot(data = resume,
@@ -50,7 +71,7 @@ p <- ggplot(data = resume,
   geom_pointrange(position = position_dodge(width = .8)) +
   labs(
     title = "Evolution des coefficients",
-    subtitle = "Modèle à une détection, effort : données GBIF",
+    subtitle = "Modèle à multiples détections, effort : données GBIF",
     x = "",
     y = "",
     color = "Année"
@@ -106,7 +127,7 @@ iep <- grid_sf %>%
   select(grid)
 for (annee in periode) {
   # out <- get(paste0("outMCMC_", annee))
-  load(paste0("Resultats_MCMC/5km2_avec_lasso/out_multi_gbif_l_iep", annee, ".RData"))
+  load(paste0("Resultats_MCMC/5km2/Annee_par_annee/out_multi_gbif_l_", annee, ".RData"))
   res <- rbind(out$samples2$chain1, out$samples2$chain2)
   mask <- str_detect(colnames(res), "lambda")
   res_lambda <- res[,mask]
@@ -118,6 +139,7 @@ for (annee in periode) {
   iep[[paste0("b_sd", annee) ]] <- apply(res_b, 2, sd)
 }
 
+lambda_max <- iep %>% select(starts_with("lambda_med")) %>% st_drop_geometry %>% max()
 
 # Intensité 
 plot_l <- do.call(
@@ -127,7 +149,7 @@ plot_l <- do.call(
            ggplot() +
              geom_sf(data = iep, color = NA, aes(fill = get(paste0("lambda_med", x)))) +
              labs(fill = "Intensité") + 
-             scale_fill_viridis_c(begin = 0, end = 1) # limits = c(0, 10)) pour fixer couleurs
+             scale_fill_viridis_c(begin = 0, end = 1, limits = c(0, lambda_max)) + # limits = c(0, 10)) pour fixer couleurs
              labs(title = x) +
              theme_light()
          })

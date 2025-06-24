@@ -485,6 +485,8 @@ rm(plan_eau, plan_eau_esp)
 
 ## Observations toutes espèces (GBIF) ####################
 
+# /!\ corrigé ! Plus de données chargées, dans une région plus adaptée
+
 # Récupération des clés taxonomiques des groupes d'intérêt
 oiseaux_key <- name_backbone(name = "Aves")$usageKey
 mammiferes_key <- name_backbone(name = "Mammalia")$usageKey
@@ -494,8 +496,14 @@ reptiles_key <- name_backbone(name = "Reptilia")$usageKey
 # Affichage des clés
 print(c(oiseaux_key, mammiferes_key, amphibiens_key, reptiles_key))
 
-# Définition de la zone géographique
-bbox_wkt <- "POLYGON((-0.4 42, 5 42, 5 45.1, -0.4 45.1, -0.4 42))"
+# # Définition de la zone géographique
+# bbox_wkt <- "POLYGON((-0.4 42, 5 42, 5 45.1, -0.4 45.1, -0.4 42))"
+
+# Définition de la zone géographique (enveloppe convexe d'occitanie)
+bbox_wkt <- occitanie %>% 
+  st_transform(crs = "WGS84") %>%
+  st_convex_hull() %>%
+  st_as_text()
 
 # Fonction pour récupérer les données d'un taxon donné
 get_gbif_data <- function(taxon_key, month, year) {
@@ -504,12 +512,12 @@ get_gbif_data <- function(taxon_key, month, year) {
     year = year,
     month = month, 
     hasCoordinate = TRUE,  # Seulement les données géolocalisées
-    limit = 500,  # Maximum d'enregistrements récupérés (à adapter)
-    geometry = paste(bbox_wkt, collapse = ",")  # Zone Occitanie
+    limit = 2000,  # Maximum d'enregistrements récupérés 
+    geometry = bbox_wkt  # Zone Occitanie
   )$data
 }
 
-# on télécharge 500 données mensuelles pour chaque taxon et chaque année
+# on télécharge 2000 données mensuelles pour chaque taxon et chaque année
 # on fait varier les mois pour éviter la saisonnalité... 
 
 gbif_data <- NULL
@@ -532,6 +540,8 @@ for (annee in periode) {
 # save(gbif_data, file = "RData/gbif_data_periode.RData")
 
 table(gbif_data$year)
+table(gbif_occ$year, gbif_occ$month)
+table(gbif_occ$year, gbif_occ$class)
 
 glimpse(gbif_data)  # Aperçu des colonnes disponibles
 

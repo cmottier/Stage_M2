@@ -205,6 +205,8 @@ rm(agri, grid_agri)
    
 ## Densité de population ####################
 
+# /!\ voir correctif ! ajout de la densité et de log(densité + 1) à grid_sf
+
 # Avec la grille
 grid_pop <- pop %>%
   st_intersection(grid_sf) %>%
@@ -213,16 +215,22 @@ grid_pop <- pop %>%
   as_tibble() %>%
   select(-geometry)
 
+grid_sf <- grid_sf %>% 
+  full_join(grid_pop, by = "grid_id") 
+
 # Densité nulle ...
 sum(grid_pop$hab == 0)
 summary(grid_pop$hab/grid_sf$area)
 min(grid_pop$hab[grid_pop$hab != 0]/grid_sf$area[grid_pop$hab != 0])
 
-# Densité 
-grid_sf <- grid_sf %>% 
-  full_join(grid_pop, by = "grid_id") %>%
-  mutate(logdensity = log(as.numeric(hab/area) + 10^(-20))) %>% # valeur arbitraire pour éviter le 0
-  select(-hab)
+
+# Log Densité 
+grid_sf <- grid_sf %>%
+  mutate(logdensity = log((hab + 1)/area)) # valeur arbitraire pour éviter le 0
+
+# grid_sf <- grid_sf %>% 
+#   mutate(logdensity = log(as.numeric(hab/area) + 10^(-20))) # valeur arbitraire pour éviter le 0
+
 
 # # Plot
 # ggplot() +
@@ -361,7 +369,8 @@ for (annee in periode) {
 }
 nobs_gbif <- as_tibble(nobs_gbif)
 
-table(nobs_gbif$gbif_2010)
+a <- 2019
+table(nobs_gbif[[paste0("gbif_",a)]])
 
 # avec une troncature à 100 (voir Twinings)
 # Troncature
@@ -376,6 +385,11 @@ grid_sf <- grid_sf %>%
   mutate(across(starts_with("dgbif"), ~log(as.numeric(.x) + 10^(-12)), .names = "log_{.col}"))  
 # 10^(-12) valeur artificielle à déterminer...
 
+# nombre de cellules avec observation 
+for (a in periode) {
+  print(length(unique(grid_sf$grid_id[as.numeric(grid_sf[[paste0("dgbif_",a)]])>0])))
+}
+
 # # plot
 # ggplot() +
 #   geom_sf(data = grid_sf, lwd = 0.1, aes(fill = as.numeric(log_dgbif_2019))) +
@@ -387,5 +401,5 @@ rm(nobs_gbif)
 
 # Enregistrement de la grille --------------------------------------------------
 
-save(grid_sf, file = "grid_sf_5km2.RData")
+save(grid_sf, file = "RData/5km2/grid_sf_5km2_bis.RData")
 

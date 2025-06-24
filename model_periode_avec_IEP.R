@@ -7,25 +7,28 @@
 # Lasso bayésien implémenté via le choix du prior des coefficients beta
 
 
+# /!\ Il faudrait ajouter une recherche d'initialisation viable... 
+
+
 # Librairies utiles ------------------------------------------------------------
 
 library(nimble)
 library(sf)
 library(tidyverse)
-library(MCMCvis)
+# library(MCMCvis)
 
 
 # Chargement et travail préalable sur grid -------------------------------------
 
 # Chargement de la grille complète
-load("grid_sf_5km2.RData")
+load("grid_sf_5km2_bis.RData")
 
-# # on garde les cellules qui intersectent à au moins 10%
-# grid_selec <- grid_selec %>%
-#   filter(as.numeric(area)>0.1*max(as.numeric(area)))
+# on garde les cellules qui intersectent à au moins 5% (densité...)
+grid_sf <- grid_sf %>%
+  filter(as.numeric(area) > 0.05*max(as.numeric(area)))
 
-# # on renumérote les cellules de la sélection
-# grid_selec$grid_id = 1:lengths(grid_selec)[1] 
+# on renumérote les cellules de la sélection
+grid_sf$grid_id <- 1:nrow(grid_sf)
 
 
 # Codes Nimble -----------------------------------------------------------------
@@ -155,7 +158,7 @@ estim_param <- function(grid, modele, effort, annee) {
   nb_observations[nb_observations > 50] <- 50 # valeur arbitraire à définir
   
   # nombre total d'observations prises en compte
-  nobs = sum(nb_observations)
+  (nobs <- sum(nb_observations))
   
   # pixel associé aux observations (avec répétition)
   obs_pixel <- NULL
@@ -224,8 +227,12 @@ estim_param <- function(grid, modele, effort, annee) {
   
   Cmodel <- compileNimble(model)
   
-  conf <- configureMCMC(Cmodel, monitors = params,
-                            monitors2 = params2, thin = nt, thin2 = 1000)
+  conf <- configureMCMC(Cmodel, 
+                        monitors = params,
+                        monitors2 = params2,
+                        thin = nt, 
+                        thin2 = 100,
+                        enableWAIC = TRUE)
   
   Rmcmc <- buildMCMC(conf)
   Cmcmc <- compileNimble(Rmcmc, project = Cmodel)
@@ -234,8 +241,8 @@ estim_param <- function(grid, modele, effort, annee) {
     Cmcmc,
     niter = ni,
     nburnin = nburn,
-    nchains = nc
-    # WAIC = TRUE
+    nchains = nc,
+    WAIC = TRUE
   )
   
   # sortie
@@ -245,11 +252,10 @@ estim_param <- function(grid, modele, effort, annee) {
 
 ## Lancement et sauvegarde #################
 
-periode = 2010:2024
+periode = 2021:2021
 
 for (annee in periode) {
   print(annee)
-  set.seed(123)
   # assign(
   #   x = paste0("outMCMC_", annee),
   #   value = estim_param(
@@ -265,14 +271,14 @@ for (annee in periode) {
     effort = "gbif",
     annee = annee
   )
-  save(out, file = paste0("out_multi_gbif_l_iep", annee, ".RData"))
+  save(out, file = paste0("out_multi_gbif_l_", annee, ".RData"))
 }
 
-# ## Plot ############################
-# 
-# MCMCsummary(out$samples, param=c("alpha", "beta"))
-# MCMCtrace(out$samples, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
-# MCMCplot(out$samples)
+## Plot ############################
+
+MCMCsummary(out$samples, param=c("alpha", "beta"))
+MCMCtrace(out$samples, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
+MCMCplot(out$samples)
 # 
 # # extraction des coefficients
 # resume <- MCMCsummary(out$samples) %>%

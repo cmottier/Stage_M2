@@ -88,8 +88,9 @@ extract_data <- function(grid, periode) {
 
 # Code Nimble ------------------------------------------------------------------
 # Multiples détections par cellule
+# Effet aléatoire sur l'intercept de l'effort
 
-## Modèle (M0) avec tout constant ##############################################
+## Modèle (M0) avec intercept d'intensité constant #############################
 
 code0 <- nimbleCode({
   # intensité et effort pour toutes les cellules
@@ -100,8 +101,8 @@ code0 <- nimbleCode({
         beta[1] * x_1[pixel] +
         beta[2] * x_2[pixel] +
         beta[3] * x_3[pixel] + 
-        beta[4] * x_4[pixel,a] + 
-        beta[5] * x_5[pixel,a] + 
+        beta[4] * x_4[pixel,a] +
+        beta[5] * x_5[pixel,a] +
         cell_area[pixel]
       # effort
       logit(b[pixel,a]) <-  alpha0[a] + alpha1 * h_1[pixel,a]
@@ -137,6 +138,9 @@ code0 <- nimbleCode({
   
   alpha1 ~ dnorm(0, sd = 2)
   
+  # probabilité de présence
+  p[1:npixel,1:nb_annees] <- 1-exp(-lambda[1:npixel,1:nb_annees])
+  
 })
 
 
@@ -152,9 +156,9 @@ code1 <- nimbleCode({
       log(lambda[pixel,a]) <- beta0[a] +
         beta[1] * x_1[pixel] +
         beta[2] * x_2[pixel] +
-        beta[3] * x_3[pixel] + 
-        beta[4] * x_4[pixel,a] + 
-        beta[5] * x_5[pixel,a] + 
+        beta[3] * x_3[pixel] +
+        beta[4] * x_4[pixel,a] +
+        beta[5] * x_5[pixel,a] +
         cell_area[pixel]
       # effort
       logit(b[pixel,a]) <-  alpha0[a] + alpha1 * h_1[pixel,a]
@@ -179,8 +183,8 @@ code1 <- nimbleCode({
     beta0[a] ~ dnorm(0, sd = 2) 
   }
   
-  for(i in 1:5){
-    beta[i] ~ ddexp(0, tau) 
+  for(i in 1:5){ 
+    beta[i] ~ ddexp(0, tau)
   }
   tau ~ dunif(0.001,10)
   
@@ -192,6 +196,8 @@ code1 <- nimbleCode({
   
   alpha1 ~ dnorm(0, sd = 2)
   
+  # probabilité de présence
+  p[1:npixel,1:nb_annees] <- 1-exp(-lambda[1:npixel,1:nb_annees])  
 })
 
 
@@ -208,8 +214,8 @@ code2 <- nimbleCode({
         beta[1] * x_1[pixel] +
         beta[2] * x_2[pixel] +
         beta[3] * x_3[pixel] + 
-        beta[4] * x_4[pixel,a] + 
-        beta[5] * x_5[pixel,a] + 
+        beta[4] * x_4[pixel,a] +
+        beta[5] * x_5[pixel,a] +
         cell_area[pixel]
       # effort
       logit(b[pixel,a]) <-  alpha0[a] + alpha1 * h_1[pixel,a]
@@ -253,6 +259,8 @@ code2 <- nimbleCode({
   
   alpha1 ~ dnorm(0, sd = 2)
   
+  # probabilité de présence
+  p[1:npixel,1:nb_annees] <- 1-exp(-lambda[1:npixel,1:nb_annees])  
 })
 
 
@@ -306,6 +314,122 @@ code3 <- nimbleCode({
   
   alpha1 ~ dnorm(0, sd = 2)
   
+  # probabilité de présence
+  p[1:npixel,1:nb_annees] <- 1-exp(-lambda[1:npixel,1:nb_annees])  
+})
+
+
+## Modèle avec coeffs de température indépendants ##############################
+# et intercept beta0 constant
+
+code4 <- nimbleCode({
+  # intensité et effort pour toutes les cellules
+  for(pixel in 1:npixel){
+    for (a in 1:nb_annees){
+      # intensité
+      log(lambda[pixel,a]) <- beta0 +
+        beta[1] * x_1[pixel] +
+        beta[2] * x_2[pixel] +
+        beta[3] * x_3[pixel] + 
+        beta[4] * x_4[pixel,a] + 
+        beta_temp[a] * x_5[pixel,a] + 
+        cell_area[pixel]
+      # effort
+      logit(b[pixel,a]) <-  alpha0[a] + alpha1 * h_1[pixel,a]
+    }
+  }
+  
+  # pour les nobs observations (obs_pixel)
+  for (a in 1:nb_annees) {
+    obs_denominator[a] <- inprod(lambda[1:npixel,a], b[1:npixel,a]) / nobs[a]
+    
+    for(obs in 1:nobs[a]){
+      ones[obs, a] ~ dbern(
+        exp(
+          log(lambda[obs_pixel[obs,a],a] * b[obs_pixel[obs,a],a]) -
+            obs_denominator[a])   
+        / CONSTANT) 
+    }
+  }
+  
+  # Priors 
+  beta0 ~ dnorm(0, sd = 2) 
+  
+  for(i in 1:4){
+    beta[i] ~ ddexp(0, tau) 
+  }
+  for (a in 1:nb_annees) {
+    beta_temp[a] ~ ddexp(0, tau) 
+  }
+  tau ~ dunif(0.001,10)
+  
+  for (a in 1:nb_annees) {
+    alpha0[a] ~ dnorm(mu.a, sd = sd.a)
+  }
+  mu.a ~ dnorm(0, sd = 2)
+  sd.a ~ dunif(0, 5)
+  
+  alpha1 ~ dnorm(0, sd = 2)
+  
+  # probabilité de présence
+  p[1:npixel,1:nb_annees] <- 1-exp(-lambda[1:npixel,1:nb_annees])  
+})
+
+
+## Modèle avec intercepts à effet aléatoire ####################################
+
+code5 <- nimbleCode({
+  # intensité et effort pour toutes les cellules
+  for(pixel in 1:npixel){
+    for (a in 1:nb_annees){
+      # intensité
+      log(lambda[pixel,a]) <- beta0[a] +
+        beta[1] * x_1[pixel] +
+        beta[2] * x_2[pixel] +
+        beta[3] * x_3[pixel] +
+        beta[4] * x_4[pixel,a] +
+        beta[5] * x_5[pixel,a] +
+        cell_area[pixel]
+      # effort
+      logit(b[pixel,a]) <-  alpha0[a] + alpha1 * h_1[pixel,a]
+    }
+  }
+  
+  # pour les nobs observations (obs_pixel)
+  for (a in 1:nb_annees) {
+    obs_denominator[a] <- inprod(lambda[1:npixel,a], b[1:npixel,a]) / nobs[a]
+    
+    for(obs in 1:nobs[a]){
+      ones[obs, a] ~ dbern(
+        exp(
+          log(lambda[obs_pixel[obs,a],a] * b[obs_pixel[obs,a],a]) -
+            obs_denominator[a])   
+        / CONSTANT) 
+    }
+  }
+  
+  # Priors 
+  for (a in 1:nb_annees) {
+    beta0[a] ~ dnorm(mu.b, sd = sd.b)
+  }
+  mu.b ~ dnorm(0, sd = 2)
+  sd.b ~ dunif(0, 5) 
+  
+  for(i in 1:5){
+    beta[i] ~ ddexp(0, tau)
+  }
+  tau ~ dunif(0.001,10)
+  
+  for (a in 1:nb_annees) {
+    alpha0[a] ~ dnorm(mu.a, sd = sd.a)
+  }
+  mu.a ~ dnorm(0, sd = 2)
+  sd.a ~ dunif(0, 5)
+  
+  alpha1 ~ dnorm(0, sd = 2)
+  
+  # probabilité de présence
+  p[1:npixel,1:nb_annees] <- 1-exp(-lambda[1:npixel,1:nb_annees])  
 })
 
 
@@ -316,11 +440,14 @@ params <- function(modele) {
   if (modele == 0 | modele == 1) {
     return(c("alpha0", "alpha1", "beta0", "beta", "mu.a", "sd.a"))
   }
-  if (modele == 2) {
+  if (modele == 2 | modele == 5) {
     return(c("alpha0", "alpha1", "beta0", "beta", "mu.a", "mu.b", "sd.a", "sd.b"))
   }
   if (modele == 3) {
     return(c("alpha0", "alpha1", "beta0", "c", "beta", "mu.a", "sd.a"))
+  }
+  if (modele == 4) {
+    return(c("alpha0", "alpha1", "beta0", "beta", "beta_temp", "mu.a", "sd.a"))
   }
 }
 
@@ -341,7 +468,7 @@ estim_param <- function(grid, modele, periode, inits) {
   
   # Paramètres à suivre
   params <- params(modele)
-  params2 <- c("lambda", "b")
+  params2 <- c("lambda", "b", "p")
   
   # MCMC settings
   nc <- 2
@@ -362,8 +489,8 @@ estim_param <- function(grid, modele, periode, inits) {
   config <- configureMCMC(Cmodel, 
                           monitors = params,
                           thin = nt,
-                          monitors2 = params2,
-                          thin2 = 1000, 
+                          monitors2 = params2, 
+                          thin2 = 100,
                           enableWAIC = TRUE
   )
   
@@ -375,7 +502,7 @@ estim_param <- function(grid, modele, periode, inits) {
     niter = ni,
     nburnin = nburn,
     nchains = nc,
-    setSeed = TRUE,
+    # setSeed = TRUE,
     # inits = inits_list
     WAIC = TRUE
   )
@@ -435,6 +562,35 @@ inits3 <- function(){
     beta = rnorm(5, 0, 1), # à mettre ?!
     tau = runif(1, 0.001,10), # à mettre ?!
     alpha0 = rnorm(nb_annees, 0, 1), # à mettre ?!
+    mu.a = rnorm(1, 0, 1),
+    sd.a = 2,
+    alpha1 = rnorm(1, 0, 1)
+  )
+}
+
+# Pour le modèle 4
+inits4 <- function(){
+  list(
+    beta0 = rnorm(1, 0, 1),
+    beta = rnorm(4, 0, 1), # à mettre ?!
+    beta_temp = rnorm(nb_annees,0,1),
+    tau = runif(1, 0.001,10), # à mettre ?!
+    alpha0 = rnorm(nb_annees, 0, 1), # à mettre ?!
+    mu.a = rnorm(1, 0, 1),
+    sd.a = 2,
+    alpha1 = rnorm(1, 0, 1)
+  )
+}
+
+# Pour le modèle 5
+inits5 <- function(){
+  list(
+    beta0 = rnorm(nb_annees, 0, 1),
+    mu.b = rnorm(1,0,1),
+    sd.b = 2,
+    beta = rnorm(5, 0, 1),
+    tau = runif(1, 0.001,10), # à mettre ?!
+    alpha0 = rnorm(nb_annees, 0, 1),
     mu.a = rnorm(1, 0, 1),
     sd.a = 2,
     alpha1 = rnorm(1, 0, 1)
