@@ -198,26 +198,25 @@ plot_p
 load("Resultats_MCMC/5km2/Annee_par_annee/resume_multi_gbif_l.RData")
 
 ### Comparaison des coefficients fixes ##################
-res_annee_par_annee <- resume %>%
+resume_global_coeffs_fixes <- resume %>%
   filter(param %in% c(paste0("beta[", c(2:6),"]"), "alpha[2]"))
 
-for (modele in c(0)) {
+for (modele in c(0,1)) {
   load(paste0("Resultats_MCMC/5km2/Gros_modele/resume_M", modele, ".RData"))
+  
+  resum_coeffs <- resum_coeffs%>%
+    rename(
+      "lower" = "2.5%",
+      "median" = "50%",
+      "upper" = "97.5%"
+    )
+  
+  res_M <- resum_coeffs[16:21,]
+  res_M$param <- c("alpha[2]", paste0("beta[", c(2:6),"]"))
+  res_M$annee <- rep(paste0("M", modele), 6)
+  
+  resume_global_coeffs_fixes <- rbind(resume_global_coeffs_fixes, res_M)
 }
-
-# modele 0
-resum_coeffs <- resum_coeffs%>%
-  rename(
-    "lower" = "2.5%",
-    "median" = "50%",
-    "upper" = "97.5%"
-  )
-
-res_M0 <- resum_coeffs[16:21,]
-res_M0$param <- c("alpha[2]", paste0("beta[", c(2:6),"]"))
-res_M0$annee <- rep("M0", 6)
-
-resume_global_coeffs_fixes <- rbind(res_annee_par_annee, res_M0)
 
 # couleurs 
 palette_auto <- scales::hue_pal()(nb_annees)
@@ -225,7 +224,7 @@ names(palette_auto) <- periode
 
 # Changer la couleur de 2020 en noir
 palette_auto["M0"] <- "black"
-
+palette_auto["M1"] <- "darkgrey"
 # plot 
 p <- ggplot(data = resume_global_coeffs_fixes,
             aes(
