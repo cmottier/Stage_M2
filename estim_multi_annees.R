@@ -35,7 +35,7 @@ nb_annees <- length(periode)
 
 donnees_utiles <- extract_data(grid_sf, periode) 
 
-modele <- 1
+modele <- 3
 # choix du modèle - type d'intercepts : 
 # 0 : constant, 1 : indépendants, 2 : marche aléatoire, 3 : linéaire, 5 : effet aléatoire
 

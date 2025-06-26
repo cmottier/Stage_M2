@@ -282,9 +282,9 @@ for (annee in periode) {
 
 ## Plot ############################
 
-MCMCsummary(out$samples, param=c("alpha", "beta"))
-MCMCtrace(out$samples, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
-MCMCplot(out$samples)
+# MCMCsummary(out$samples, param=c("alpha", "beta"))
+# MCMCtrace(out$samples, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
+# MCMCplot(out$samples)
 # 
 # # extraction des coefficients
 # resume <- MCMCsummary(out$samples) %>%

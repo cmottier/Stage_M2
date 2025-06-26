@@ -8,6 +8,7 @@ library(tidyverse)
 periode <- 2010:2024
 
 ## Observation d'une variable #################################
+
 v <- "tmin_" 
 v <- "pcum_"
 v <- "dgbif_"
@@ -18,7 +19,7 @@ do.call(
          function(x) {
            ggplot() +
              geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(get(paste0(v, x))))) +
-             labs(v) + 
+             labs(fill = v) + 
              scale_fill_viridis_c(begin = 0, end = 1) +# limits = c(0, 10)) pour fixer couleurs
              labs(title = x) +
              theme_light()
@@ -91,6 +92,53 @@ p <- ggplot(data = resume,
 p
 # ggsave(plot = p, "Image/periode_uni_prox.png", dpi = 600)
 
+# pour rajouter la somme des intercepts : 
+
+somme_df <- resume %>%
+  filter(param %in% c("alpha[1]", "beta[1]")) %>%
+  group_by(annee) %>%
+  summarise(
+    param = "somme intercepts",
+    median = sum(median),
+    lower = sum(median), # pas de valeur
+    upper = sum(median), # pas de valeur
+    .groups = "drop"
+  )
+
+# Ajouter les lignes au data.frame principal
+resume_extended <- bind_rows(resume, somme_df)
+
+p <- ggplot(data = resume_extended,
+            aes(
+              y = param,
+              x = median,
+              xmin = lower,
+              xmax = upper,
+              color = as.factor(annee)
+            )) +
+  geom_vline(aes(xintercept = 0)) +
+  geom_pointrange(position = position_dodge(width = .8)) +
+  labs(
+    title = "Evolution des coefficients",
+    subtitle = "Modèle à multiples détections, effort : données GBIF",
+    x = "",
+    y = "",
+    color = "Année"
+  ) +
+  scale_y_discrete(
+    labels = c(
+      "intercept eff",
+      "densité GBIF",
+      "intercept int",
+      "dist eau",
+      "logdensite",
+      "agri",
+      "preci cum",
+      "temp min", 
+      "somme intercepts"
+    )
+  )
+p
 
 ## Distributions des intensités, efforts, probabilités ##############
 
@@ -123,8 +171,10 @@ MCMCtrace(out, pdf = FALSE, ind = TRUE, params = c("alpha", "beta"))
 #          1-exp(-get(paste0("lambda_",a))))
 # }
 
-iep <- grid_sf %>%
+iep <- grid_sf  %>%
+  filter(as.numeric(area) > 0.05*max(as.numeric(area))) %>%
   select(grid)
+
 for (annee in periode) {
   # out <- get(paste0("outMCMC_", annee))
   load(paste0("Resultats_MCMC/5km2/Annee_par_annee/out_multi_gbif_l_", annee, ".RData"))
@@ -137,25 +187,37 @@ for (annee in periode) {
   res_b <- res[,mask]
   iep[[paste0("b_med", annee) ]] <- apply(res_b, 2, median)
   iep[[paste0("b_sd", annee) ]] <- apply(res_b, 2, sd)
+  mask <- str_detect(colnames(res), "p")
+  res_p <- res[,mask]
+  iep[[paste0("p_med", annee) ]] <- apply(res_p, 2, median)
+  iep[[paste0("p_sd", annee) ]] <- apply(res_p, 2, sd)
 }
+
+# save(iep, file = "Resultats_MCMC/5km2/Annee_par_annee/iep_multi_gbif_l.RData")
+
+# Intensité 
 
 lambda_max <- iep %>% select(starts_with("lambda_med")) %>% st_drop_geometry %>% max()
 
-# Intensité 
 plot_l <- do.call(
   wrap_plots,
-  lapply(periode,
+  list(lapply(2010:2024,
          function(x) {
            ggplot() +
              geom_sf(data = iep, color = NA, aes(fill = get(paste0("lambda_med", x)))) +
              labs(fill = "Intensité") + 
-             scale_fill_viridis_c(begin = 0, end = 1, limits = c(0, lambda_max)) + # limits = c(0, 10)) pour fixer couleurs
+             scale_fill_viridis_c(begin = 0, end = 1) + #, limits = c(0, lambda_max)) + 
              labs(title = x) +
              theme_light()
          })
-)
+  # , guides = 'collect'
+  )
+) +
+  plot_annotation(title = "Intensités - année par année") 
 
 plot_l
+
+sd_l_max <- iep %>% select(starts_with("lambda_sd")) %>% st_drop_geometry %>% max()
 
 plot_l_sd <- do.call(
   wrap_plots,
@@ -172,19 +234,46 @@ plot_l_sd <- do.call(
 
 plot_l_sd
 
+# effort 
+
+b_max <- iep %>% select(starts_with("b_med")) %>% st_drop_geometry %>% max()
+
+plot_b <- do.call(
+  wrap_plots,
+  list(lapply(periode,
+              function(x) {
+                ggplot() +
+                  geom_sf(data = iep, color = NA, aes(fill = get(paste0("b_med", x)))) +
+                  labs(fill = "Effort") + 
+                  scale_fill_viridis_c(begin = 0, end = 1, limits = c(0,1)) + #, limits = c(0, lambda_max)) + 
+                  labs(title = x) +
+                  theme_light()
+              })
+       , guides = 'collect'
+  )
+) +
+  plot_annotation(title = "Effort - année par année") 
+
+plot_b
+
+
+# probabilité de présence
 
 plot_p <- do.call(
   wrap_plots,
-  lapply(2010:2016,
-         function(x) {
-           ggplot() +
-             geom_sf(data = grid_sf, color = NA, aes(fill = get(paste0("p_", x)))) +
-             labs(fill = "Probabilité") + 
-             scale_fill_viridis_c(begin = 0, end = 1) +
-             labs(title = x) +
-             theme_light()
-         })
-)
+  list(lapply(periode,
+              function(x) {
+                ggplot() +
+                  geom_sf(data = iep, color = NA, aes(fill = get(paste0("p_med", x)))) +
+                  labs(fill = "Probabilité") + 
+                  scale_fill_viridis_c(begin = 0, end = 1, limits = c(0,1)) + 
+                  labs(title = x) +
+                  theme_light()
+              })
+       , guides = 'collect'
+  )
+) +
+  plot_annotation(title = "Probabilité de présence - année par année") 
 
 plot_p
 
