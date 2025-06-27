@@ -170,13 +170,13 @@ estim_param <- function(grid, modele, effort, annee) {
   
   if (effort == 'prox') {
     data$h_1 <- scale(grid$dist_acces)[, 1]
-  }
-  else {
+  } else {
     data$h_1 <- scale(grid[[paste0("dgbif_", annee)]])[, 1]
   }
   
-  if (modele == 1) { data$ones <- rep(1, length(pixel.id.det)) }
-  else {
+  if (modele == 1) { 
+    data$ones <- rep(1, length(pixel.id.det)) 
+    } else {
     data$ones <- rep(1, nobs)
   }
 
