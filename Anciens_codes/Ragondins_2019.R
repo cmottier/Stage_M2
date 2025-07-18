@@ -32,7 +32,7 @@ rm(dpts_occitanie)
 ## Ragondins 2019 #############
 
 # Import des données
-nutria <- st_read("Data/Data_pts_test_infos.shp") %>%
+nutria <- st_read("Data/CEN_ancien/Data_pts_test_infos.shp") %>%
   mutate(year = year(as.Date(jourdebut))) %>% 
   filter(year == 2019) %>%
   filter(nomvern == "Ragondin") 

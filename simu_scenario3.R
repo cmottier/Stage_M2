@@ -222,15 +222,16 @@ resume <- function(out) {
 
 # Lancement des n simulations
 
-n <- 50
+n <- 3
 resultat <- NULL 
 
 for (i in 1:n) {
   print(i)
   dat <- simu(dat)
   out <- estim(dat)
+  save(out, file = paste0("simu", i, "_scenario3.RData"))
   resultat[[i]] <- resume(out)
 }
 
-save(resultat, file = "simulation_scenario3.RData")
+save(resultat, file = "simulation_scenario3_test.RData")
 

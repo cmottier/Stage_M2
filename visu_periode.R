@@ -5,13 +5,30 @@ library(patchwork)
 library(sf)
 library(tidyverse)
 
-periode <- 2010:2024
+periode <- 2010:2015
 
-## Observation d'une variable #################################
+# Chargement -------------------------------------------------------------------
+
+# on charge
+load("~/SSD/M2/Stage/Code/RData/5km2/grid_sf_5km2.RData")
+
+# on garde les cellules qui intersectent à au moins 5% (densité...)
+grid_sf <- grid_sf %>%
+  filter(as.numeric(area) > 0.05*max(as.numeric(area)))
+
+# on renumérote les cellules de la sélection
+grid_sf$grid_id <- 1:nrow(grid_sf)
+
+
+
+# Observation d'une variable ---------------------------------------------------
+
+# Variables annuelles 
 
 v <- "tmin_" 
 v <- "pcum_"
 v <- "dgbif_"
+v <- "log_dgbif_"
 
 do.call(
   wrap_plots,
@@ -26,6 +43,8 @@ do.call(
          })
 )
 
+# Variables fixes 
+
 v <- "agri_cover"  
 v <- "density"
 v <- "logdensity"   
@@ -39,13 +58,52 @@ ggplot() +
   theme_light()
 
 
-## Evolution des coefficients ###############################
+# Observations de toutes les variables pour une année --------------------------
+
+annee <- 2024
+
+# pour les variables d'intensité :
+
+variables <- c(paste0("tmin_", annee), paste0("pcum_", annee), "dist_eau", "agri_cover", "logdensity")
+unites <- c("°C", "m", "m", "%","")
+nom_variables <- c("Température moy. mensuelle min.", "Précipitation annuelle cumulée",
+                   "Distance à l'eau la plus proche", "Proportion de surface agricole", "Log-densité de population")
+titre <- paste0("Variables explicatives de l'intensité pour l'année ", annee)
+
+# pour les variables d'effort :
+
+variables <- c("dist_acces", paste0("log_dgbif_", annee))
+unites <- c("m", "")
+nom_variables <- c("Distance à l'accès le plus proche", "Log-densité d'observation GBIF")
+titre <- paste0("Variables d'effort pour l'année ", annee)
+
+# plot 
+
+do.call(
+  wrap_plots,
+  list(lapply(1:length(variables),
+         function(i) {
+           ggplot() +
+             geom_sf(data = grid_sf, color = NA, aes(fill = as.numeric(get(variables[i])))) +
+             labs(fill = unites[i]) +
+             scale_fill_viridis_c(begin = 0, end = 1) +# limits = c(0, 10)) pour fixer couleurs
+             labs(title = nom_variables[i]) +
+             theme_light()
+         }),
+       ncol = 2)
+) +
+  plot_annotation(title = titre) 
+
+
+
+# Evolution annuelle des coefficients ------------------------------------------
 
 # extraction des coefficients
+
 resume <- NULL
 for (annee in periode) {
   # out <- get(paste0("outMCMC_", annee))
-  load(paste0("Resultats_MCMC/5km2/Annee_par_annee/out_multi_gbif_l_", annee, ".RData"))
+  load(paste0("Resultats_MCMC/5km2/Annee_par_annee/GBIF/Avec_lasso/out_gbif_", annee, ".RData"))
   resume_out <- MCMCsummary(out$samples) %>%
     rename(
       "lower" = "2.5%",
@@ -57,58 +115,79 @@ for (annee in periode) {
   resume <- rbind(resume, resume_out)
 }
 
-# save(resume, file = "Resultats_MCMC/5km2/Annee_par_annee/resume_multi_gbif_l.RData")
+# save(resume, file = "Resultats_MCMC/5km2/Annee_par_annee/Acces/resume_acces.RData")
+
+# Ou chargement des coefficients ...
+
+# load("~/SSD/M2/Stage/Code/Resultats_MCMC/5km2/Annee_par_annee/Acces/resume_acces.RData")
 
 # plot 
+# couleur de fond
+bandes_fond <- data.frame(
+  param = unique(resume$param),
+  ymin = (1:8) - 0.5,
+  ymax = (1:8) + 0.5,
+  fill = rep(c("gray70", "gray90"), length.out = 8)
+)
+
 p <- ggplot(data = resume,
        aes(
          y = param,
          x = median,
          xmin = lower,
          xmax = upper,
-         color = as.factor(annee)
+         color = as.factor(annee),
+         group = as.factor(annee) 
        )) +
+  geom_rect(data = bandes_fond,
+            aes(xmin = -Inf, xmax = Inf, ymin = ymin, ymax = ymax, fill = I(fill)),
+            inherit.aes = FALSE,
+            alpha = 0.4,
+            show.legend = FALSE) +
   geom_vline(aes(xintercept = 0)) +
-  geom_pointrange(position = position_dodge(width = .8)) +
+  geom_pointrange(position = position_dodge(width = -.8)) +
   labs(
-    title = "Evolution des coefficients",
-    subtitle = "Modèle à multiples détections, effort : données GBIF",
+    title = "Coefficients des modèles annuels",
+    subtitle = "Variable d'effort : distance à l'accès le plus proche",
     x = "",
     y = "",
     color = "Année"
   ) +
   scale_y_discrete(
     labels = c(
-      "intercept_eff",
-      "densité GBIF",
-      "intercept_int",
-      "dist_eau",
-      "logdensite",
+      "temp min",
+      "preci cum",
       "agri",
-      "preci_cum",
-      "temp_min"
-    )
+      "log densité",
+      "dist eau",
+      "intercept int",
+      "dist acces",
+      "intercept eff"
+    ),
+    limits = rev # pour mettre dans le bon ordre
   )
 p
-# ggsave(plot = p, "Image/periode_uni_prox.png", dpi = 600)
 
-# pour rajouter la somme des intercepts : 
+# sélection de certaines coefficients
+# beta seul 
+coeff_beta <- resume %>%
+  filter(grepl("^beta", param))
 
-somme_df <- resume %>%
-  filter(param %in% c("alpha[1]", "beta[1]")) %>%
-  group_by(annee) %>%
-  summarise(
-    param = "somme intercepts",
-    median = sum(median),
-    lower = sum(median), # pas de valeur
-    upper = sum(median), # pas de valeur
-    .groups = "drop"
-  )
+# pentes seules (intensité)
+coeff_pentes <- coeff_beta %>%
+  filter(!grepl("beta\\[1\\]", param))
 
-# Ajouter les lignes au data.frame principal
-resume_extended <- bind_rows(resume, somme_df)
+# couleur de fond
+bandes_fond <- data.frame(
+  param = unique(coeff_pentes$param),
+  ymin = (1:5) - 0.5,
+  ymax = (1:5) + 0.5,
+  fill = rep(c("gray70", "gray90"), length.out = 5)
+)
 
-p <- ggplot(data = resume_extended,
+
+# plot 
+ggplot(data = coeff_pentes,
             aes(
               y = param,
               x = median,
@@ -116,29 +195,80 @@ p <- ggplot(data = resume_extended,
               xmax = upper,
               color = as.factor(annee)
             )) +
+  geom_rect(data = bandes_fond,
+            aes(xmin = -Inf, xmax = Inf, ymin = ymin, ymax = ymax, fill = I(fill)),
+            inherit.aes = FALSE,
+            alpha = 0.4,
+            show.legend = FALSE) +
   geom_vline(aes(xintercept = 0)) +
-  geom_pointrange(position = position_dodge(width = .8)) +
+  geom_pointrange(position = position_dodge(width = -.8)) +
   labs(
-    title = "Evolution des coefficients",
-    subtitle = "Modèle à multiples détections, effort : données GBIF",
+    title = "Coefficients des variables d'intensité des modèles annuels",
+    subtitle = "Variable d'effort : distance à l'accès le plus proche",
     x = "",
     y = "",
     color = "Année"
   ) +
   scale_y_discrete(
     labels = c(
-      "intercept eff",
-      "densité GBIF",
-      "intercept int",
-      "dist eau",
-      "logdensite",
-      "agri",
+      "temp min",
       "preci cum",
-      "temp min", 
-      "somme intercepts"
-    )
+      "agri",
+      "log densité",
+      "dist eau"
+      # "intercept int"
+    ),
+    limits = rev # pour mettre dans le bon ordre
   )
-p
+
+
+# # pour rajouter la somme des intercepts : 
+# 
+# somme_df <- resume %>%
+#   filter(param %in% c("alpha[1]", "beta[1]")) %>%
+#   group_by(annee) %>%
+#   summarise(
+#     param = "somme intercepts",
+#     median = sum(median),
+#     lower = sum(median), # pas de valeur
+#     upper = sum(median), # pas de valeur
+#     .groups = "drop"
+#   )
+# 
+# # Ajouter les lignes au data.frame principal
+# resume_extended <- bind_rows(resume, somme_df)
+# 
+# p <- ggplot(data = resume_extended,
+#             aes(
+#               y = param,
+#               x = median,
+#               xmin = lower,
+#               xmax = upper,
+#               color = as.factor(annee)
+#             )) +
+#   geom_vline(aes(xintercept = 0)) +
+#   geom_pointrange(position = position_dodge(width = .8)) +
+#   labs(
+#     title = "Evolution des coefficients",
+#     subtitle = "Modèle à multiples détections, effort : données GBIF",
+#     x = "",
+#     y = "",
+#     color = "Année"
+#   ) +
+#   scale_y_discrete(
+#     labels = c(
+#       "intercept eff",
+#       "densité GBIF",
+#       "intercept int",
+#       "dist eau",
+#       "logdensite",
+#       "agri",
+#       "preci cum",
+#       "temp min", 
+#       "somme intercepts"
+#     )
+#   )
+# p
 
 ## Distributions des intensités, efforts, probabilités ##############
 
@@ -177,7 +307,7 @@ iep <- grid_sf  %>%
 
 for (annee in periode) {
   # out <- get(paste0("outMCMC_", annee))
-  load(paste0("Resultats_MCMC/5km2/Annee_par_annee/out_multi_gbif_l_", annee, ".RData"))
+  load(paste0("correction_code/out_corrige_", annee, ".RData"))
   res <- rbind(out$samples2$chain1, out$samples2$chain2)
   mask <- str_detect(colnames(res), "lambda")
   res_lambda <- res[,mask]

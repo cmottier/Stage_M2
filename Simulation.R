@@ -7,7 +7,7 @@ library(ggplot2)
 library(tidyverse)
 # library(sf)
 library(spatstat)
-# library(AHMbook)
+library(AHMbook)
 library(nimble)
 library(MCMCvis)
 library(plot.matrix)
@@ -100,8 +100,8 @@ nt2 <- 100
 
 # Coefficients choisis ---------------------------------------------------------
 
-alpha <- c(0, 0.1) # effort : b = plogis(...+...*w)
-beta <- c(6, 1) # intensité : l = exp(...+...*x)
+alpha <- c(-1, 1) # effort : b = plogis(...+...*w)
+beta <- c(5, 1) # intensité : l = exp(...+...*x)
 
 # Simulation des observations --------------------------------------------------
 
@@ -127,7 +127,7 @@ dat <- simDataDK(
 # str(dat, 1)
 
 # Our landscape is inhabited by a total of ... individuals (dat$N.ipp)
-# dat$N.ipp
+dat$N.ipp
 
 # of which ... are detected
 # dat$N.det

@@ -107,14 +107,15 @@ inits <- function(){
 
 alpha <- c(-2, 1) # effort : b = plogis(...+...*w)
 beta <- c(-2, 1, 1) # intensité : l = exp(...+...*x)
-
+# alpha <- c(-2,2) # pour simu_4_ter
+# beta <- c(-6,2,2)
 
 # Construction des données -----------------------------------------------------
 # Avec une loi multinormale (Fithian et al) 
 
 dim <- 50
-g <- 0.95
-sigma <- matrix(c(1,0,g,0,1,0,g,0,1), nrow = 3, byrow = T)
+g <- 0.95 # scenario4 : 0.95, scenario4_bis : 0.98
+sigma <- matrix(c(1,0,g,0,1,0,g,0,1), nrow = 3, byrow = T) # x1 et w corrélées
 
 # construction des covariables centrées réduites
 set.seed(1234)
@@ -234,15 +235,16 @@ resume <- function(out) {
 
 # Lancement des n simulations
 
-n <- 50
+n <- 5
 resultat <- NULL 
 
 for (i in 1:n) {
   print(i)
   dat <- simu(dat)
   out <- estim(dat)
+  save(out, file = paste0("simu",i,"_scenario4.RData"))
   resultat[[i]] <- resume(out)
 }
 
-save(resultat, file = "simulation_scenario4.RData")
+save(resultat, file = "simulation_scenario4_test.RData") 
 

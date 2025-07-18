@@ -759,9 +759,11 @@ ggplot() +
 
 
 ## Identifiabilité #####################
+sequence <- seq(-1,1,0.05)
 
 invcond <- NULL
 for (g in sequence) {
+  print(g)
   sigma <- matrix(c(1,0,g,0,1,0,g,0,1), nrow = 3, byrow = TRUE)
   val <- NULL
   for (simu in 1:30) {
